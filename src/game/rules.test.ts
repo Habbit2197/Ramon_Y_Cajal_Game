@@ -9,12 +9,35 @@ import {
   isCircleCollision,
   evaluateStageOutcome,
   calculateCognitiveFatigue,
+  computeAnimationBlendWeights,
 } from './rules';
+import { useGameStore } from '../store/useGameStore';
+import { FATIGUE_FRAGMENT_SHADER } from '../shaders/FatigueShader';
 
-test('calculateCognitiveFatigue computes grayscale desaturation proportional to BrainPower reduction', () => {
+test('useGameStore initializes brainPower at 50 and clamps increasePower / decreasePower between 0 and 100', () => {
+  useGameStore.getState().resetPower();
+  assert.equal(useGameStore.getState().brainPower, 50);
+
+  useGameStore.getState().increasePower(30);
+  assert.equal(useGameStore.getState().brainPower, 80);
+
+  useGameStore.getState().increasePower(50);
+  assert.equal(useGameStore.getState().brainPower, 100);
+
+  useGameStore.getState().decreasePower(40);
+  assert.equal(useGameStore.getState().brainPower, 60);
+
+  useGameStore.getState().decreasePower(200);
+  assert.equal(useGameStore.getState().brainPower, 0);
+
+  assert.ok(FATIGUE_FRAGMENT_SHADER.includes('uniform float uDesaturation'));
+});
+
+test('calculateCognitiveFatigue computes grayscale desaturation and synaptic bloom proportional to BrainPower', () => {
   const full = calculateCognitiveFatigue(100);
   assert.equal(full.desaturation, 0);
   assert.equal(full.fatiguePercent, 0);
+  assert.equal(full.bloomStrength, 0.85);
 
   const half = calculateCognitiveFatigue(50);
   assert.equal(half.desaturation, 0.5);
@@ -27,6 +50,27 @@ test('calculateCognitiveFatigue computes grayscale desaturation proportional to 
   const depleted = calculateCognitiveFatigue(0);
   assert.equal(depleted.desaturation, 1);
   assert.equal(depleted.fatiguePercent, 100);
+  assert.equal(depleted.bloomStrength, 0.1);
+});
+
+test('computeAnimationBlendWeights transitions smoothly between Idle, Run, Hit, and Victory', () => {
+  const idle = computeAnimationBlendWeights(0, 10.5, false, false);
+  assert.equal(idle.dominantState, 'Idle');
+  assert.equal(idle.idle, 1);
+  assert.equal(idle.run, 0);
+
+  const running = computeAnimationBlendWeights(9.5, 10.5, false, false);
+  assert.equal(running.dominantState, 'Run');
+  assert.equal(running.run, 1);
+  assert.equal(running.idle, 0);
+
+  const hit = computeAnimationBlendWeights(5.0, 10.5, true, false);
+  assert.equal(hit.dominantState, 'Hit');
+  assert.equal(hit.hit, 0.85);
+
+  const victory = computeAnimationBlendWeights(0, 10.5, false, true);
+  assert.equal(victory.dominantState, 'Victory');
+  assert.equal(victory.victory, 1);
 });
 
 test('createInitialPlayerState initializes with level spawn and initial BrainPower', () => {

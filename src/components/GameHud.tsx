@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { HudSnapshot } from './Canvas3D';
 import { LevelConfig } from '../game/rules';
 
@@ -94,9 +95,9 @@ export const GameHud: React.FC<GameHudProps> = ({
           </div>
 
           {/* Bottom Row of Cluster: Vitality Sockets + Speed Physics Multiplier + Score */}
-          <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/10">
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
             {/* Discrete Vitality Pips (Full / Cracked / Empty Hollow Socket) */}
-            <div className="flex items-center gap-1.5" aria-label={`Vitalidad ${hud.vitality} de ${hud.maxVitality}`}>
+            <div className="flex items-center gap-1" aria-label={`Vitalidad ${hud.vitality} de ${hud.maxVitality}`}>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mr-1">
                 Salud
               </span>
@@ -127,8 +128,8 @@ export const GameHud: React.FC<GameHudProps> = ({
               })}
             </div>
 
-            {/* Live Physics Speed Modifier & Cognitive Fatigue Shader Readout */}
-            <div className="flex items-center gap-2 text-xs font-mono tabular-nums">
+            {/* Live Physics Speed Modifier, Cognitive Fatigue Shader & Blend Tree State Readout */}
+            <div className="flex items-center gap-1.5 text-xs font-mono tabular-nums">
               <span className="text-[10px] uppercase text-slate-400">Fatiga</span>
               <span
                 data-testid="cognitive-fatigue-readout"
@@ -154,8 +155,20 @@ export const GameHud: React.FC<GameHudProps> = ({
                 {speedPct}%
               </span>
               <span className="text-slate-600">·</span>
-              <span className="text-[10px] uppercase text-slate-400">Pts</span>
-              <span className="text-amber-300 font-bold">{Math.round(hud.score)}</span>
+              <span
+                data-testid="anim-state-readout"
+                className={
+                  hud.animState === 'Hit'
+                    ? 'text-red-400 font-bold'
+                    : hud.animState === 'Run'
+                    ? 'text-sky-300 font-bold'
+                    : hud.animState === 'Victory'
+                    ? 'text-emerald-300 font-bold'
+                    : 'text-amber-300 font-semibold'
+                }
+              >
+                {hud.animState}
+              </span>
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ENGINE_COMPARISON,
   INITIAL_TYPESCRIPT_SCRIPT,
+  NEXT_GEN_R3F_PIPELINE_SNIPPET,
   PROJECT_SCAFFOLDING,
 } from '../game/gddData';
 import { ITEM_CATALOG, LEVELS } from '../game/rules';
@@ -11,7 +12,7 @@ interface GddModalProps {
   onClose: () => void;
 }
 
-type GddTab = 'core-loop' | 'levels' | 'stack' | 'scaffolding' | 'script';
+type GddTab = 'core-loop' | 'levels' | 'stack' | 'scaffolding' | 'script' | 'nextgen';
 
 export const GddModal: React.FC<GddModalProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<GddTab>('core-loop');
@@ -53,7 +54,7 @@ export const GddModal: React.FC<GddModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Navigation Tabs for the 5 Requested Sections */}
+        {/* Navigation Tabs for the 6 Technical Sections */}
         <div className="flex items-center gap-1.5 px-6 py-3 bg-[#0f141d] border-b border-white/10 overflow-x-auto">
           {[
             { id: 'core-loop', label: '1. Core Loop y Mecánicas' },
@@ -61,6 +62,7 @@ export const GddModal: React.FC<GddModalProps> = ({ isOpen, onClose }) => {
             { id: 'stack', label: '3. Motor y Stack (Godot vs Three.js)' },
             { id: 'scaffolding', label: '4. Estructura (Scaffolding)' },
             { id: 'script', label: '5. Primer Script (BrainPower 3D)' },
+            { id: 'nextgen', label: '6. Pipeline Next-Gen (PBR / Blend Trees / VFX)' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -290,6 +292,31 @@ export const GddModal: React.FC<GddModalProps> = ({ isOpen, onClose }) => {
               </div>
               <pre className="bg-[#0a0d14] border border-white/10 rounded-xl p-4 text-xs font-mono text-sky-200 overflow-x-auto leading-relaxed">
                 {INITIAL_TYPESCRIPT_SCRIPT}
+              </pre>
+            </div>
+          )}
+
+          {activeTab === 'nextgen' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold font-display text-[#ffd166]">
+                    6. Pipeline Next-Gen Web (R3F, Zustand, PBR, Blend Trees y Shader GLSL)
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    Arquitectura con store global Zustand (`src/store/useGameStore.ts`), shader GLSL (`src/shaders/FatigueShader.ts`), `MeshPhysicalMaterial`, `ContactShadows`, `Sparkles` instanciadas y Blend Trees esqueletales (`Idle`, `Run`, `Hit`, `Victory`).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(NEXT_GEN_R3F_PIPELINE_SNIPPET, 'nextgen')}
+                  className="px-3 py-1.5 bg-[#1e2638] hover:bg-[#2a354d] border border-[#d4a359]/40 rounded-lg text-xs font-semibold text-[#ffd166] cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  {copiedKey === 'nextgen' ? '¡Pipeline Copiado!' : 'Copiar Pipeline R3F'}
+                </button>
+              </div>
+              <pre className="bg-[#0a0d14] border border-white/10 rounded-xl p-4 text-xs font-mono text-emerald-200 overflow-x-auto leading-relaxed">
+                {NEXT_GEN_R3F_PIPELINE_SNIPPET}
               </pre>
             </div>
           )}

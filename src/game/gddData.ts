@@ -205,3 +205,37 @@ export const ENGINE_COMPARISON: EngineComparisonRow[] = [
     verdict: 'Recomendación final: Three.js + React + TypeScript.',
   },
 ];
+
+export const NEXT_GEN_R3F_PIPELINE_SNIPPET = `// 1. Esqueleto y Blend Trees (Idle / Run / Hit / Victory) + Draco GLTF
+import React, { useEffect, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useGLTF, useAnimations, Environment, ContactShadows, Sparkles, Text3D } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import { computeAnimationBlendWeights } from '../rules';
+
+export function NextGenStudentCharacter({ speed, baseSpeed, isHit, isVictory, brainPower }) {
+  const group = useRef(null);
+  // Carga con compresión Draco (.glb exportado desde Mixamo)
+  const { nodes, materials, animations } = useGLTF('/models/student-draco.glb', true);
+  const { actions } = useAnimations(animations, group);
+
+  useFrame((_, dt) => {
+    // Blend Tree determinista compartido con nuestro motor Three.js
+    const weights = computeAnimationBlendWeights(speed, baseSpeed, isHit, isVictory);
+    actions.Idle?.setEffectiveWeight(weights.idle);
+    actions.Run?.setEffectiveWeight(weights.run);
+    actions.Hit?.setEffectiveWeight(weights.hit);
+    actions.Victory?.setEffectiveWeight(weights.victory);
+  });
+
+  return (
+    <group ref={group}>
+      <primitive object={nodes.RootBone} />
+      {/* 2. Sombras de Contacto suaves y económicas bajo el personaje */}
+      <ContactShadows opacity={0.65} scale={4.5} blur={2.2} far={4} />
+      {/* 3. Partículas Sinápticas Instanciadas alrededor de la Corona Neuronal */}
+      <Sparkles count={48} scale={3.5} size={2.4} speed={0.6} color="#ffd166" />
+    </group>
+  );
+}`;
+

@@ -14,6 +14,7 @@ import {
   PlayerPhysicsState,
   applyItemCollision,
   calculateCognitiveFatigue,
+  computeAnimationBlendWeights,
   createInitialPlayerState,
   evaluateStageOutcome,
   isCircleCollision,
@@ -27,6 +28,7 @@ export type GameAppState = 'title' | 'playing' | 'paused' | 'gameover';
 export interface HudSnapshot {
   brainPower: number;
   cognitiveFatiguePct: number;
+  animState: 'Idle' | 'Run' | 'Hit' | 'Victory';
   vitality: number;
   maxVitality: number;
   speedModifier: number;
@@ -85,7 +87,6 @@ interface ParticlePool {
   mesh: THREE.InstancedMesh;
   positions: Float32Array;
   velocities: Float32Array;
-  GoldColors: Float32Array;
   lives: Float32Array;
   maxLives: Float32Array;
   scales: Float32Array;
@@ -93,17 +94,54 @@ interface ParticlePool {
   count: number;
 }
 
+interface AmbientSparkleField {
+  mesh: THREE.InstancedMesh;
+  basePositions: Float32Array;
+  phases: Float32Array;
+  count: number;
+}
+
 // Module-scope reusable scratch objects (Zero-GC in animation loop)
 const _vec3A = new THREE.Vector3();
-const _vec3B = new THREE.Vector3();
 const _mat4 = new THREE.Matrix4();
 const _quat = new THREE.Quaternion();
 const _scaleVec = new THREE.Vector3();
 const _color = new THREE.Color();
 
+let _sharedSoftShadowTex: THREE.CanvasTexture | null = null;
+function getSoftContactShadowTexture(): THREE.CanvasTexture {
+  if (_sharedSoftShadowTex) return _sharedSoftShadowTex;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(64, 64, 6, 64, 64, 60);
+  grad.addColorStop(0, 'rgba(5, 8, 14, 0.72)');
+  grad.addColorStop(0.55, 'rgba(5, 8, 14, 0.28)');
+  grad.addColorStop(1, 'rgba(5, 8, 14, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  _sharedSoftShadowTex = new THREE.CanvasTexture(canvas);
+  return _sharedSoftShadowTex;
+}
+
+function createContactShadowMesh(radius = 0.95): THREE.Mesh {
+  const geo = new THREE.PlaneGeometry(radius * 2.2, radius * 2.2);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({
+    map: getSoftContactShadowTexture(),
+    transparent: true,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 0.015;
+  return mesh;
+}
+
 function createProceduralPathTexture(maxAnisotropy: number): {
   colorMap: THREE.CanvasTexture;
   bumpMap: THREE.CanvasTexture;
+  roughnessMap: THREE.CanvasTexture;
 } {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -113,15 +151,14 @@ function createProceduralPathTexture(maxAnisotropy: number): {
   ctx.fillStyle = '#7d6952';
   ctx.fillRect(0, 0, 256, 256);
 
-  // Draw histological-inspired organic stone tiles & axons
   for (let y = 0; y < 256; y += 32) {
     for (let x = 0; x < 256; x += 64) {
       const offset = (y / 32) % 2 === 0 ? 0 : 32;
-      ctx.fillStyle = (x + y) % 64 === 0 ? '#8a755c' : '#725f49';
-      ctx.strokeStyle = '#524332';
-      ctx.lineWidth = 2;
+      ctx.fillStyle = (x + y) % 64 === 0 ? '#8c765c' : '#736049';
+      ctx.strokeStyle = '#4c3e2e';
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.roundRect((x + offset) % 256, y + 2, 60, 28, 5);
+      ctx.roundRect((x + offset) % 256, y + 2, 60, 28, 6);
       ctx.fill();
       ctx.stroke();
     }
@@ -140,8 +177,8 @@ function createProceduralPathTexture(maxAnisotropy: number): {
   const bCtx = bumpCanvas.getContext('2d')!;
   bCtx.fillStyle = '#808080';
   bCtx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 400; i++) {
-    const shade = 100 + ((i * 37) % 55);
+  for (let i = 0; i < 450; i++) {
+    const shade = 95 + ((i * 37) % 70);
     bCtx.fillStyle = `rgb(${shade},${shade},${shade})`;
     bCtx.fillRect((i * 53) % 256, (i * 97) % 256, 4, 4);
   }
@@ -153,195 +190,328 @@ function createProceduralPathTexture(maxAnisotropy: number): {
   bumpMap.repeat.set(3, 14);
   bumpMap.anisotropy = maxAnisotropy;
 
-  return { colorMap, bumpMap };
-}
-
-function createContactShadowMesh(radius = 0.85): THREE.Mesh {
-  const geo = new THREE.CircleGeometry(radius, 20);
-  geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0x05070a,
-    transparent: true,
-    opacity: 0.42,
-    depthWrite: false,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = 0.015;
-  return mesh;
+  return { colorMap, bumpMap, roughnessMap: bumpMap };
 }
 
 /**
- * Builds the 10-part composite 3D boy protagonist with a dynamic Neural Halo
- * that grows dendrites as BrainPower approaches 100%.
+ * Builds a Diegetic 3D Text Sign / Plaque directly in the 3D scene with an extruded brass frame.
+ */
+function buildDiegetic3DSign(
+  initialText: string,
+  subText: string,
+  width = 4.6,
+  height = 1.05
+): {
+  group: THREE.Group;
+  updateSign: (mainText: string, secondaryText: string, accentHex: string) => void;
+} {
+  const group = new THREE.Group();
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const updateSign = (mainText: string, secondaryText: string, accentHex: string) => {
+    ctx.clearRect(0, 0, 512, 128);
+    ctx.fillStyle = '#0e131d';
+    ctx.strokeStyle = accentHex;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(4, 4, 504, 120, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = accentHex;
+    ctx.font = 'bold 34px "Fraunces", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(mainText, 256, 56);
+
+    ctx.fillStyle = '#f4efe6';
+    ctx.font = '600 22px "JetBrains Mono", monospace';
+    ctx.fillText(secondaryText, 256, 96);
+    texture.needsUpdate = true;
+  };
+
+  updateSign(initialText, subText, '#ffd166');
+
+  // 3D Extruded Brass Frame
+  const frameMat = new THREE.MeshPhysicalMaterial({
+    color: 0xd4a359,
+    roughness: 0.25,
+    metalness: 0.85,
+    clearcoat: 0.8,
+  });
+  const backing = new THREE.Mesh(new THREE.BoxGeometry(width + 0.16, height + 0.16, 0.12), frameMat);
+  group.add(backing);
+
+  const faceMat = new THREE.MeshBasicMaterial({ map: texture });
+  const faceMesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), faceMat);
+  faceMesh.position.z = 0.068;
+  group.add(faceMesh);
+
+  return { group, updateSign };
+}
+
+/**
+ * Builds the 10-part composite 3D boy protagonist with MeshPhysicalMaterial and
+ * a full THREE.AnimationMixer Blend Tree (Idle, Run, Hit, Victory).
  */
 function buildPlayerBoyMesh(): {
   root: THREE.Group;
+  pelvis: THREE.Group;
   leftLeg: THREE.Mesh;
   rightLeg: THREE.Mesh;
   leftArm: THREE.Mesh;
   rightArm: THREE.Mesh;
+  head: THREE.Mesh;
   neuralHalo: THREE.Group;
-  haloMat: THREE.MeshStandardMaterial;
-  bodyMat: THREE.MeshStandardMaterial;
+  haloMat: THREE.MeshPhysicalMaterial;
+  bodyMat: THREE.MeshPhysicalMaterial;
+  mixer: THREE.AnimationMixer;
+  actions: {
+    idle: THREE.AnimationAction;
+    run: THREE.AnimationAction;
+    hit: THREE.AnimationAction;
+    victory: THREE.AnimationAction;
+  };
 } {
   const root = new THREE.Group();
-  root.add(createContactShadowMesh(0.95));
+  root.add(createContactShadowMesh(1.0));
 
-  const sneakerMat = new THREE.MeshStandardMaterial({
+  const pelvis = new THREE.Group();
+  pelvis.name = 'pelvis';
+  root.add(pelvis);
+
+  const sneakerMat = new THREE.MeshPhysicalMaterial({
     color: 0xe63946,
-    roughness: 0.78,
+    roughness: 0.45,
     metalness: 0.1,
+    clearcoat: 0.5,
   });
-  const legMat = new THREE.MeshStandardMaterial({
+  const legMat = new THREE.MeshPhysicalMaterial({
     color: 0x1d3557,
-    roughness: 0.72,
+    roughness: 0.68,
     metalness: 0.08,
   });
-  const bodyMat = new THREE.MeshStandardMaterial({
+  const bodyMat = new THREE.MeshPhysicalMaterial({
     color: 0x2a9d8f,
-    roughness: 0.48,
+    roughness: 0.38,
     metalness: 0.15,
+    clearcoat: 0.35,
   });
-  const skinMat = new THREE.MeshStandardMaterial({
+  const skinMat = new THREE.MeshPhysicalMaterial({
     color: 0xf4a261,
-    roughness: 0.62,
+    roughness: 0.55,
     metalness: 0.05,
+    sheen: 0.3,
   });
-  const hairMat = new THREE.MeshStandardMaterial({
+  const hairMat = new THREE.MeshPhysicalMaterial({
     color: 0x2b1d12,
-    roughness: 0.85,
+    roughness: 0.78,
     metalness: 0.05,
   });
-  const backpackMat = new THREE.MeshStandardMaterial({
+  const backpackMat = new THREE.MeshPhysicalMaterial({
     color: 0xe9c46a,
-    roughness: 0.35,
-    metalness: 0.45,
+    roughness: 0.28,
+    metalness: 0.5,
+    clearcoat: 0.65,
   });
 
-  // 1 & 2: Left & Right Legs + Sneakers
   const legGeo = new THREE.CylinderGeometry(0.14, 0.12, 0.7, 12);
   const shoeGeo = new THREE.BoxGeometry(0.24, 0.14, 0.36);
 
   const leftLeg = new THREE.Mesh(legGeo, legMat);
+  leftLeg.name = 'leftLeg';
   leftLeg.position.set(-0.2, 0.38, 0);
   leftLeg.castShadow = true;
   const leftShoe = new THREE.Mesh(shoeGeo, sneakerMat);
   leftShoe.position.set(0, -0.3, 0.05);
   leftLeg.add(leftShoe);
-  root.add(leftLeg);
+  pelvis.add(leftLeg);
 
   const rightLeg = new THREE.Mesh(legGeo, legMat);
+  rightLeg.name = 'rightLeg';
   rightLeg.position.set(0.2, 0.38, 0);
   rightLeg.castShadow = true;
   const rightShoe = new THREE.Mesh(shoeGeo, sneakerMat);
   rightShoe.position.set(0, -0.3, 0.05);
   rightLeg.add(rightShoe);
-  root.add(rightLeg);
+  pelvis.add(rightLeg);
 
-  // 3: Torso Jacket
   const torsoGeo = new THREE.CylinderGeometry(0.36, 0.32, 0.82, 16);
   const torso = new THREE.Mesh(torsoGeo, bodyMat);
+  torso.name = 'torso';
   torso.position.set(0, 1.08, 0);
   torso.castShadow = true;
-  root.add(torso);
+  pelvis.add(torso);
 
-  // 4: Explorer Backpack + Metallic Buckle
   const packGeo = new THREE.BoxGeometry(0.48, 0.54, 0.26);
   const backpack = new THREE.Mesh(packGeo, backpackMat);
   backpack.position.set(0, 1.12, -0.34);
   backpack.castShadow = true;
-  root.add(backpack);
+  pelvis.add(backpack);
 
-  // 5 & 6: Left & Right Arms
   const armGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.62, 10);
   const leftArm = new THREE.Mesh(armGeo, bodyMat);
+  leftArm.name = 'leftArm';
   leftArm.position.set(-0.46, 1.1, 0);
   leftArm.castShadow = true;
-  root.add(leftArm);
+  pelvis.add(leftArm);
 
   const rightArm = new THREE.Mesh(armGeo, bodyMat);
+  rightArm.name = 'rightArm';
   rightArm.position.set(0.46, 1.1, 0);
   rightArm.castShadow = true;
-  root.add(rightArm);
+  pelvis.add(rightArm);
 
-  // 7 & 8: Head + Sculpted Hair Cap
   const headGeo = new THREE.SphereGeometry(0.34, 18, 16);
   const head = new THREE.Mesh(headGeo, skinMat);
+  head.name = 'head';
   head.position.set(0, 1.78, 0);
   head.castShadow = true;
-  root.add(head);
+  pelvis.add(head);
 
   const hairGeo = new THREE.SphereGeometry(0.36, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.58);
   const hair = new THREE.Mesh(hairGeo, hairMat);
-  hair.position.set(0, 1.82, -0.02);
+  hair.position.set(0, 0.04, -0.02);
   hair.rotation.x = -0.18;
-  root.add(hair);
+  head.add(hair);
 
-  // 9 & 10: Dynamic Synaptic Neural Crown (grows with BrainPower)
+  // Dynamic Synaptic Neural Crown (High-Emissive PBR for Selective Bloom)
   const neuralHalo = new THREE.Group();
-  neuralHalo.position.set(0, 2.32, 0);
-  const haloMat = new THREE.MeshStandardMaterial({
+  neuralHalo.position.set(0, 2.34, 0);
+  const haloMat = new THREE.MeshPhysicalMaterial({
     color: 0xffd166,
-    emissive: 0xf4a261,
-    emissiveIntensity: 0.9,
-    roughness: 0.2,
-    metalness: 0.8,
+    emissive: 0xffb703,
+    emissiveIntensity: 1.35,
+    roughness: 0.15,
+    metalness: 0.85,
+    clearcoat: 1.0,
   });
-  const ringGeo = new THREE.TorusGeometry(0.48, 0.035, 10, 28);
+  const ringGeo = new THREE.TorusGeometry(0.48, 0.038, 10, 28);
   ringGeo.rotateX(Math.PI / 2);
   const ringMesh = new THREE.Mesh(ringGeo, haloMat);
   neuralHalo.add(ringMesh);
 
-  const nodeGeo = new THREE.OctahedronGeometry(0.08, 0);
+  const nodeGeo = new THREE.OctahedronGeometry(0.085, 0);
   for (let i = 0; i < 6; i++) {
     const angle = (i / 6) * Math.PI * 2;
     const node = new THREE.Mesh(nodeGeo, haloMat);
     node.position.set(Math.cos(angle) * 0.48, 0, Math.sin(angle) * 0.48);
     neuralHalo.add(node);
   }
-  root.add(neuralHalo);
+  pelvis.add(neuralHalo);
 
-  return { root, leftLeg, rightLeg, leftArm, rightArm, neuralHalo, haloMat, bodyMat };
+  // Build THREE.AnimationMixer & 4 Skeletal Blend Tree Clips (Idle, Run, Hit, Victory)
+  const mixer = new THREE.AnimationMixer(root);
+
+  // 1. Idle Clip (subtle breathing bob & gentle arm sway)
+  const idleClip = new THREE.AnimationClip('Idle', 1.6, [
+    new THREE.NumberKeyframeTrack('pelvis.position[y]', [0, 0.8, 1.6], [0, 0.04, 0]),
+    new THREE.NumberKeyframeTrack('leftArm.rotation[x]', [0, 0.8, 1.6], [-0.06, 0.06, -0.06]),
+    new THREE.NumberKeyframeTrack('rightArm.rotation[x]', [0, 0.8, 1.6], [0.06, -0.06, 0.06]),
+    new THREE.NumberKeyframeTrack('leftLeg.rotation[x]', [0, 1.6], [0, 0]),
+    new THREE.NumberKeyframeTrack('rightLeg.rotation[x]', [0, 1.6], [0, 0]),
+  ]);
+
+  // 2. Run Clip (energetic stride & opposing arm pump)
+  const runClip = new THREE.AnimationClip('Run', 0.56, [
+    new THREE.NumberKeyframeTrack('pelvis.position[y]', [0, 0.14, 0.28, 0.42, 0.56], [0, 0.09, 0, 0.09, 0]),
+    new THREE.NumberKeyframeTrack('leftLeg.rotation[x]', [0, 0.14, 0.28, 0.42, 0.56], [0, 0.62, 0, -0.62, 0]),
+    new THREE.NumberKeyframeTrack('rightLeg.rotation[x]', [0, 0.14, 0.28, 0.42, 0.56], [0, -0.62, 0, 0.62, 0]),
+    new THREE.NumberKeyframeTrack('leftArm.rotation[x]', [0, 0.14, 0.28, 0.42, 0.56], [0, -0.58, 0, 0.58, 0]),
+    new THREE.NumberKeyframeTrack('rightArm.rotation[x]', [0, 0.14, 0.28, 0.42, 0.56], [0, 0.58, 0, -0.58, 0]),
+  ]);
+
+  // 3. Hit Clip (recoil stumble when impacting tobacco/alcohol hazard)
+  const hitClip = new THREE.AnimationClip('Hit', 0.45, [
+    new THREE.NumberKeyframeTrack('pelvis.rotation[x]', [0, 0.15, 0.45], [0, -0.32, 0]),
+    new THREE.NumberKeyframeTrack('leftArm.rotation[z]', [0, 0.2, 0.45], [0, 0.55, 0]),
+    new THREE.NumberKeyframeTrack('rightArm.rotation[z]', [0, 0.2, 0.45], [0, -0.55, 0]),
+  ]);
+
+  // 4. Victory Clip (celebratory jump & raised arms)
+  const victoryClip = new THREE.AnimationClip('Victory', 0.9, [
+    new THREE.NumberKeyframeTrack('pelvis.position[y]', [0, 0.45, 0.9], [0, 0.35, 0]),
+    new THREE.NumberKeyframeTrack('leftArm.rotation[z]', [0, 0.45, 0.9], [0.8, 2.5, 0.8]),
+    new THREE.NumberKeyframeTrack('rightArm.rotation[z]', [0, 0.45, 0.9], [-0.8, -2.5, -0.8]),
+  ]);
+
+  const actions = {
+    idle: mixer.clipAction(idleClip),
+    run: mixer.clipAction(runClip),
+    hit: mixer.clipAction(hitClip),
+    victory: mixer.clipAction(victoryClip),
+  };
+
+  actions.idle.play();
+  actions.run.play();
+  actions.hit.play();
+  actions.victory.play();
+
+  actions.idle.setEffectiveWeight(1);
+  actions.run.setEffectiveWeight(0);
+  actions.hit.setEffectiveWeight(0);
+  actions.victory.setEffectiveWeight(0);
+
+  return {
+    root,
+    pelvis,
+    leftLeg,
+    rightLeg,
+    leftArm,
+    rightArm,
+    head,
+    neuralHalo,
+    haloMat,
+    bodyMat,
+    mixer,
+    actions,
+  };
 }
 
 /**
- * Builds the Synaptic Portal + Don Santiago Ramón y Cajal mentor figure at the end of the level.
+ * Builds the Synaptic Portal + Don Santiago Ramón y Cajal mentor figure + 3D Diegetic Banner.
  */
 function buildCajalPortalGroup(position: { x: number; z: number }): {
   group: THREE.Group;
   vortexRing: THREE.Mesh;
-  vortexMat: THREE.MeshStandardMaterial;
+  vortexMat: THREE.MeshPhysicalMaterial;
   cajalFigure: THREE.Group;
+  updatePortalSign: (bp: number, unlocked: boolean) => void;
 } {
   const group = new THREE.Group();
   group.position.set(position.x, 0, position.z);
 
-  const brassMat = new THREE.MeshStandardMaterial({
+  const brassMat = new THREE.MeshPhysicalMaterial({
     color: 0xd4a359,
-    roughness: 0.25,
-    metalness: 0.85,
+    roughness: 0.22,
+    metalness: 0.88,
+    clearcoat: 0.85,
   });
-  const stoneMat = new THREE.MeshStandardMaterial({
+  const stoneMat = new THREE.MeshPhysicalMaterial({
     color: 0x3d405b,
-    roughness: 0.8,
+    roughness: 0.72,
     metalness: 0.15,
   });
-  const vortexMat = new THREE.MeshStandardMaterial({
+  const vortexMat = new THREE.MeshPhysicalMaterial({
     color: 0x38bdf8,
     emissive: 0x0284c7,
-    emissiveIntensity: 0.6,
-    roughness: 0.15,
+    emissiveIntensity: 0.95,
+    roughness: 0.12,
     metalness: 0.5,
+    clearcoat: 1.0,
   });
 
-  // Base pedestal platform
   const baseGeo = new THREE.CylinderGeometry(3.4, 3.8, 0.32, 24);
   const baseMesh = new THREE.Mesh(baseGeo, stoneMat);
   baseMesh.position.y = 0.16;
   baseMesh.receiveShadow = true;
   group.add(baseMesh);
 
-  // Left & Right Brass Microscope Columns
   const pillarGeo = new THREE.CylinderGeometry(0.28, 0.35, 4.2, 16);
   const leftPillar = new THREE.Mesh(pillarGeo, brassMat);
   leftPillar.position.set(-2.3, 2.1, 0);
@@ -353,37 +523,53 @@ function buildCajalPortalGroup(position: { x: number; z: number }): {
   rightPillar.castShadow = true;
   group.add(rightPillar);
 
-  // Synaptic Arch Torus
   const archGeo = new THREE.TorusGeometry(2.3, 0.22, 14, 32, Math.PI);
   const archMesh = new THREE.Mesh(archGeo, brassMat);
   archMesh.position.set(0, 2.1, 0);
   group.add(archMesh);
 
-  // Rotating Inner Synaptic Vortex Ring
-  const vortexGeo = new THREE.TorusGeometry(1.75, 0.12, 12, 32);
+  const vortexGeo = new THREE.TorusGeometry(1.75, 0.14, 12, 32);
   const vortexRing = new THREE.Mesh(vortexGeo, vortexMat);
   vortexRing.position.set(0, 2.2, 0);
   group.add(vortexRing);
 
-  // Don Santiago Ramón y Cajal Mentor Figure standing beside the portal
+  // Diegetic 3D Sign mounted above the Portal Archway
+  const portalSign = buildDiegetic3DSign('PORTAL SINÁPTICO', 'RED NEURONAL: 20% / 100%', 4.8, 1.05);
+  portalSign.group.position.set(0, 5.1, 0);
+  group.add(portalSign.group);
+
+  let lastSignBp = -1;
+  const updatePortalSign = (bp: number, unlocked: boolean) => {
+    const rounded = Math.round(bp);
+    if (rounded === lastSignBp) return;
+    lastSignBp = rounded;
+    if (unlocked) {
+      portalSign.updateSign('¡PORTAL SINÁPTICO ACTIVO!', 'RED NEURONAL: 100% COMPLETA', '#34d399');
+    } else {
+      portalSign.updateSign('PORTAL SINÁPTICO DE CAJAL', `PROGRESO NEURONAL: ${rounded}% / 100%`, '#ffd166');
+    }
+  };
+
+  // Don Santiago Ramón y Cajal Mentor Figure
   const cajalFigure = new THREE.Group();
   cajalFigure.position.set(3.2, 0.16, 1.1);
   cajalFigure.rotation.y = -0.45;
-  cajalFigure.add(createContactShadowMesh(0.8));
+  cajalFigure.add(createContactShadowMesh(0.85));
 
-  const coatMat = new THREE.MeshStandardMaterial({
+  const coatMat = new THREE.MeshPhysicalMaterial({
     color: 0x1e222d,
-    roughness: 0.75,
+    roughness: 0.68,
     metalness: 0.1,
+    sheen: 0.4,
   });
-  const beardMat = new THREE.MeshStandardMaterial({
+  const beardMat = new THREE.MeshPhysicalMaterial({
     color: 0xe5e7eb,
-    roughness: 0.85,
+    roughness: 0.82,
     metalness: 0.05,
   });
-  const skinMat = new THREE.MeshStandardMaterial({
+  const skinMat = new THREE.MeshPhysicalMaterial({
     color: 0xf1c27d,
-    roughness: 0.6,
+    roughness: 0.55,
     metalness: 0.05,
   });
 
@@ -409,7 +595,6 @@ function buildCajalPortalGroup(position: { x: number; z: number }): {
   hatTop.position.y = 2.14;
   cajalFigure.add(hatTop);
 
-  // Brass Microscope on stand next to Cajal
   const standMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 1.0, 12), stoneMat);
   standMesh.position.set(-0.75, 0.5, 0.35);
   cajalFigure.add(standMesh);
@@ -421,22 +606,23 @@ function buildCajalPortalGroup(position: { x: number; z: number }): {
 
   group.add(cajalFigure);
 
-  return { group, vortexRing, vortexMat, cajalFigure };
+  return { group, vortexRing, vortexMat, cajalFigure, updatePortalSign };
 }
 
 /**
- * Builds composite 3D pickup models for healthy items.
+ * Builds composite 3D pickup models using MeshPhysicalMaterial (clearcoat, ior, sheen).
  */
 function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
   const group = new THREE.Group();
-  group.add(createContactShadowMesh(0.65));
+  group.add(createContactShadowMesh(0.72));
 
-  const ringMat = new THREE.MeshStandardMaterial({
+  const ringMat = new THREE.MeshPhysicalMaterial({
     color: 0x34d399,
     emissive: 0x059669,
-    emissiveIntensity: 0.5,
-    roughness: 0.25,
-    metalness: 0.6,
+    emissiveIntensity: 0.75,
+    roughness: 0.18,
+    metalness: 0.65,
+    clearcoat: 0.9,
   });
   const baseRing = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.04, 8, 24), ringMat);
   baseRing.rotation.x = Math.PI / 2;
@@ -444,17 +630,21 @@ function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
   group.add(baseRing);
 
   if (subType === 'water') {
-    const bottleMat = new THREE.MeshStandardMaterial({
+    const bottleMat = new THREE.MeshPhysicalMaterial({
       color: 0x38bdf8,
       emissive: 0x0284c7,
-      emissiveIntensity: 0.35,
-      roughness: 0.15,
-      metalness: 0.25,
+      emissiveIntensity: 0.45,
+      roughness: 0.08,
+      metalness: 0.15,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.05,
+      ior: 1.33,
     });
-    const capMat = new THREE.MeshStandardMaterial({
+    const capMat = new THREE.MeshPhysicalMaterial({
       color: 0xf8fafc,
-      roughness: 0.5,
+      roughness: 0.35,
       metalness: 0.1,
+      clearcoat: 0.6,
     });
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.72, 14), bottleMat);
     body.position.y = 0.65;
@@ -468,17 +658,20 @@ function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
     cap.position.y = 1.25;
     group.add(cap);
   } else if (subType === 'apple') {
-    const appleMat = new THREE.MeshStandardMaterial({
+    const appleMat = new THREE.MeshPhysicalMaterial({
       color: 0xef4444,
       emissive: 0x991b1b,
-      emissiveIntensity: 0.25,
-      roughness: 0.28,
-      metalness: 0.1,
+      emissiveIntensity: 0.3,
+      roughness: 0.18,
+      metalness: 0.05,
+      clearcoat: 0.92,
+      clearcoatRoughness: 0.1,
     });
-    const leafMat = new THREE.MeshStandardMaterial({
+    const leafMat = new THREE.MeshPhysicalMaterial({
       color: 0x22c55e,
-      roughness: 0.5,
+      roughness: 0.4,
       metalness: 0.1,
+      clearcoat: 0.5,
     });
     const apple = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 14), appleMat);
     apple.scale.set(1.05, 0.92, 1.05);
@@ -487,7 +680,7 @@ function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
 
     const stem = new THREE.Mesh(
       new THREE.CylinderGeometry(0.03, 0.04, 0.22, 8),
-      new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.85 })
+      new THREE.MeshPhysicalMaterial({ color: 0x5c4033, roughness: 0.85 })
     );
     stem.position.y = 1.08;
     group.add(stem);
@@ -497,12 +690,13 @@ function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
     leaf.rotation.z = 0.35;
     group.add(leaf);
   } else if (subType === 'walnut') {
-    const nutMat = new THREE.MeshStandardMaterial({
+    const nutMat = new THREE.MeshPhysicalMaterial({
       color: 0xd97706,
       emissive: 0x92400e,
-      emissiveIntensity: 0.3,
-      roughness: 0.65,
+      emissiveIntensity: 0.35,
+      roughness: 0.52,
       metalness: 0.15,
+      clearcoat: 0.35,
     });
     const leftLobe = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), nutMat);
     leftLobe.scale.set(0.85, 1.05, 1.2);
@@ -514,17 +708,18 @@ function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
     rightLobe.position.set(0.14, 0.72, 0);
     group.add(rightLobe);
   } else {
-    // science_book
-    const coverMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      emissive: 0xb45309,
-      emissiveIntensity: 0.4,
-      roughness: 0.35,
-      metalness: 0.5,
+    // science_book (Tratado de Histología)
+    const coverMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffd166,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.85,
+      roughness: 0.22,
+      metalness: 0.65,
+      clearcoat: 0.9,
     });
-    const pagesMat = new THREE.MeshStandardMaterial({
+    const pagesMat = new THREE.MeshPhysicalMaterial({
       color: 0xfef3c7,
-      roughness: 0.8,
+      roughness: 0.75,
     });
     const bookCover = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.14, 0.78), coverMat);
     bookCover.position.y = 0.75;
@@ -564,10 +759,9 @@ function buildHazardGroup(subType: ItemSubType): {
   group.add(telegraphRing);
 
   if (subType === 'tobacco_smoke') {
-    // Cigarette body + glowing ember tip + 3 dark toxic smoke clouds
     const cigBody = new THREE.Mesh(
       new THREE.CylinderGeometry(0.11, 0.11, 0.85, 12),
-      new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.8 })
+      new THREE.MeshPhysicalMaterial({ color: 0xe5e7eb, roughness: 0.75 })
     );
     cigBody.position.set(0, 0.55, 0);
     cigBody.rotation.z = 0.45;
@@ -575,19 +769,19 @@ function buildHazardGroup(subType: ItemSubType): {
 
     const ember = new THREE.Mesh(
       new THREE.SphereGeometry(0.13, 10, 10),
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshPhysicalMaterial({
         color: 0xff4500,
         emissive: 0xff2200,
-        emissiveIntensity: 1.4,
-        roughness: 0.4,
+        emissiveIntensity: 1.5,
+        roughness: 0.35,
       })
     );
     ember.position.set(-0.2, 0.92, 0);
     group.add(ember);
 
-    const smokeMat = new THREE.MeshStandardMaterial({
+    const smokeMat = new THREE.MeshPhysicalMaterial({
       color: 0x4b5563,
-      roughness: 0.9,
+      roughness: 0.88,
       metalness: 0.05,
     });
     const offsets = [
@@ -601,16 +795,17 @@ function buildHazardGroup(subType: ItemSubType): {
       group.add(puff);
     });
   } else if (subType === 'junk_food') {
-    // Sugary soda/junk hazard charger
-    const canMat = new THREE.MeshStandardMaterial({
+    const canMat = new THREE.MeshPhysicalMaterial({
       color: 0xdc2626,
-      roughness: 0.25,
-      metalness: 0.65,
-    });
-    const lidMat = new THREE.MeshStandardMaterial({
-      color: 0xd1d5db,
       roughness: 0.2,
-      metalness: 0.9,
+      metalness: 0.72,
+      clearcoat: 0.85,
+    });
+    const lidMat = new THREE.MeshPhysicalMaterial({
+      color: 0xd1d5db,
+      roughness: 0.18,
+      metalness: 0.92,
+      clearcoat: 0.8,
     });
     const can = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.95, 16), canMat);
     can.position.y = 0.65;
@@ -622,19 +817,19 @@ function buildHazardGroup(subType: ItemSubType): {
 
     const sugarRing = new THREE.Mesh(
       new THREE.TorusGeometry(0.56, 0.08, 8, 20),
-      new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.6 })
+      new THREE.MeshPhysicalMaterial({ color: 0xfbbf24, roughness: 0.45, clearcoat: 0.6 })
     );
     sugarRing.rotation.x = Math.PI / 2;
     sugarRing.position.y = 0.55;
     group.add(sugarRing);
   } else {
-    // alcohol_toxin: Dark purple bottle + swirling neurotoxin rings
-    const bottleMat = new THREE.MeshStandardMaterial({
+    const bottleMat = new THREE.MeshPhysicalMaterial({
       color: 0x7e22ce,
       emissive: 0x581c87,
-      emissiveIntensity: 0.55,
-      roughness: 0.18,
+      emissiveIntensity: 0.6,
+      roughness: 0.12,
       metalness: 0.4,
+      clearcoat: 0.95,
     });
     const flask = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.45, 0.85, 16), bottleMat);
     flask.position.y = 0.58;
@@ -646,10 +841,10 @@ function buildHazardGroup(subType: ItemSubType): {
 
     const toxinRing = new THREE.Mesh(
       new THREE.TorusGeometry(0.62, 0.06, 8, 24),
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshPhysicalMaterial({
         color: 0xc084fc,
         emissive: 0x9333ea,
-        emissiveIntensity: 0.8,
+        emissiveIntensity: 0.9,
       })
     );
     toxinRing.rotation.x = 1.2;
@@ -661,48 +856,53 @@ function buildHazardGroup(subType: ItemSubType): {
 }
 
 /**
- * Populates natural perimeter trees/props and level landmarks so the arena is grounded and rich.
+ * Populates natural perimeter trees/props, PBR road surfaces, and a 3D Diegetic Stage Archway.
  */
 function buildLevelEnvironment(
   scene: THREE.Scene,
   level: LevelConfig,
-  pathTextures: { colorMap: THREE.CanvasTexture; bumpMap: THREE.CanvasTexture }
+  pathTextures: {
+    colorMap: THREE.CanvasTexture;
+    bumpMap: THREE.CanvasTexture;
+    roughnessMap: THREE.CanvasTexture;
+  }
 ): THREE.Group {
   const envGroup = new THREE.Group();
 
-  // Extended terrain ground (no indoor box walls)
   const groundGeo = new THREE.PlaneGeometry(180, 180);
   groundGeo.rotateX(-Math.PI / 2);
-  const groundMat = new THREE.MeshStandardMaterial({
+  const groundMat = new THREE.MeshPhysicalMaterial({
     color: level.groundColor,
-    roughness: 0.92,
+    roughness: 0.88,
     metalness: 0.04,
   });
   const groundMesh = new THREE.Mesh(groundGeo, groundMat);
   groundMesh.receiveShadow = true;
   envGroup.add(groundMesh);
 
-  // Central Histological Cobblestone Avenue (offset by +0.02 Y to avoid Z-fighting)
+  // Central Histological Cobblestone Avenue with PBR Bump & Roughness Maps
   const roadGeo = new THREE.PlaneGeometry(11.5, 52);
   roadGeo.rotateX(-Math.PI / 2);
-  const roadMat = new THREE.MeshStandardMaterial({
+  const roadMat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     map: pathTextures.colorMap,
     bumpMap: pathTextures.bumpMap,
-    bumpScale: 0.04,
-    roughness: 0.82,
-    metalness: 0.06,
+    bumpScale: 0.045,
+    roughnessMap: pathTextures.roughnessMap,
+    roughness: 0.75,
+    metalness: 0.08,
+    clearcoat: 0.22,
   });
   const roadMesh = new THREE.Mesh(roadGeo, roadMat);
   roadMesh.position.set(0, 0.02, -1);
   roadMesh.receiveShadow = true;
   envGroup.add(roadMesh);
 
-  // Decorative Golden Axon Side Rails along the avenue
-  const railMat = new THREE.MeshStandardMaterial({
+  const railMat = new THREE.MeshPhysicalMaterial({
     color: 0xd4a359,
-    roughness: 0.4,
-    metalness: 0.65,
+    roughness: 0.3,
+    metalness: 0.75,
+    clearcoat: 0.7,
   });
   [-5.85, 5.85].forEach((rx) => {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 52), railMat);
@@ -711,10 +911,9 @@ function buildLevelEnvironment(
     envGroup.add(rail);
   });
 
-  // Perimeter Dendritic Trees / Streetlamps / Columns (Composite 3-part trees)
-  const trunkMat = new THREE.MeshStandardMaterial({
+  const trunkMat = new THREE.MeshPhysicalMaterial({
     color: 0x4a3525,
-    roughness: 0.88,
+    roughness: 0.85,
     metalness: 0.05,
   });
   const canopyColor =
@@ -723,16 +922,17 @@ function buildLevelEnvironment(
       : level.environmentTheme === 'school'
       ? 0xd97706
       : 0x4c1d95;
-  const canopyMat = new THREE.MeshStandardMaterial({
+  const canopyMat = new THREE.MeshPhysicalMaterial({
     color: canopyColor,
-    roughness: 0.65,
-    metalness: 0.1,
+    roughness: 0.58,
+    metalness: 0.08,
+    clearcoat: 0.25,
   });
-  const lampGlowMat = new THREE.MeshStandardMaterial({
+  const lampGlowMat = new THREE.MeshPhysicalMaterial({
     color: 0xfde68a,
     emissive: 0xf59e0b,
-    emissiveIntensity: 0.9,
-    roughness: 0.2,
+    emissiveIntensity: 1.25,
+    roughness: 0.15,
   });
 
   const treeCoords: Array<[number, number, number]> = [
@@ -758,6 +958,7 @@ function buildLevelEnvironment(
     const tree = new THREE.Group();
     tree.position.set(tx, 0, tz);
     tree.scale.setScalar(scale);
+    tree.add(createContactShadowMesh(1.4));
 
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.48, 2.4, 10), trunkMat);
     trunk.position.y = 1.2;
@@ -774,7 +975,6 @@ function buildLevelEnvironment(
     upperCrown.castShadow = true;
     tree.add(upperCrown);
 
-    // Synaptic firefly node on tree tip
     const tipLight = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), lampGlowMat);
     tipLight.position.y = 5.4;
     tree.add(tipLight);
@@ -786,16 +986,51 @@ function buildLevelEnvironment(
   return envGroup;
 }
 
+/**
+ * Ambient 3D Synaptic Sparkles (<Sparkles/> InstancedMesh equivalent) floating along the avenue.
+ */
+function createAmbientSparkleField(scene: THREE.Scene): AmbientSparkleField {
+  const count = 48;
+  const geo = new THREE.OctahedronGeometry(0.08, 0);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffe082 });
+  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  mesh.frustumCulled = false;
+
+  const basePositions = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+
+  for (let i = 0; i < count; i++) {
+    const x = ((i * 73) % 100) / 10 - 5.0;
+    const y = 0.6 + ((i * 31) % 30) / 10;
+    const z = 16 - (i / count) * 36;
+    basePositions[i * 3] = x;
+    basePositions[i * 3 + 1] = y;
+    basePositions[i * 3 + 2] = z;
+    phases[i] = i * 0.7;
+
+    _vec3A.set(x, y, z);
+    _quat.identity();
+    _scaleVec.setScalar(0.8);
+    _mat4.compose(_vec3A, _quat, _scaleVec);
+    mesh.setMatrixAt(i, _mat4);
+    mesh.setColorAt(i, _color.setHex(i % 3 === 0 ? 0x38bdf8 : 0xffd166));
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  scene.add(mesh);
+
+  return { mesh, basePositions, phases, count };
+}
+
 function createParticlePool(scene: THREE.Scene): ParticlePool {
-  const count = 90;
-  const geo = new THREE.OctahedronGeometry(0.12, 0);
+  const count = 96;
+  const geo = new THREE.OctahedronGeometry(0.13, 0);
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   mesh.frustumCulled = false;
 
   const positions = new Float32Array(count * 3);
   const velocities = new Float32Array(count * 3);
-  const GoldColors = new Float32Array(count * 3);
   const lives = new Float32Array(count);
   const maxLives = new Float32Array(count);
   const scales = new Float32Array(count);
@@ -815,7 +1050,6 @@ function createParticlePool(scene: THREE.Scene): ParticlePool {
     mesh,
     positions,
     velocities,
-    GoldColors,
     lives,
     maxLives,
     scales,
@@ -830,7 +1064,7 @@ function spawnParticleBurst(
   y: number,
   z: number,
   hexColor: number,
-  burstCount = 14
+  burstCount = 16
 ): void {
   _color.setHex(hexColor);
   for (let i = 0; i < burstCount; i++) {
@@ -843,14 +1077,14 @@ function spawnParticleBurst(
     pool.positions[i3 + 2] = z;
 
     const angle = (i / burstCount) * Math.PI * 2 + (idx % 3) * 0.2;
-    const speed = 2.2 + (idx % 5) * 0.65;
+    const speed = 2.4 + (idx % 5) * 0.7;
     pool.velocities[i3] = Math.cos(angle) * speed;
-    pool.velocities[i3 + 1] = 2.5 + (idx % 4) * 0.8;
+    pool.velocities[i3 + 1] = 2.7 + (idx % 4) * 0.85;
     pool.velocities[i3 + 2] = Math.sin(angle) * speed;
 
-    pool.lives[idx] = 0.55;
-    pool.maxLives[idx] = 0.55;
-    pool.scales[idx] = 1.0 + (idx % 3) * 0.3;
+    pool.lives[idx] = 0.6;
+    pool.maxLives[idx] = 0.6;
+    pool.scales[idx] = 1.05 + (idx % 3) * 0.35;
 
     pool.mesh.setColorAt(idx, _color);
   }
@@ -869,7 +1103,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // Store mutable React props/callbacks in refs so the WebGL canvas is mounted ONCE
   const appStateRef = useRef<GameAppState>(appState);
   const levelIndexRef = useRef<number>(levelIndex);
   const onHudUpdateRef = useRef(onHudUpdate);
@@ -894,7 +1127,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     const container = mountRef.current;
     if (!container) return;
 
-    // 1. Detect software WebGL (SwiftShader / llvmpipe) per Three.js skill
     const isSoftwareGl = (() => {
       const gl = document.createElement('canvas').getContext('webgl2');
       if (!gl) return true;
@@ -915,7 +1147,10 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = !isSoftwareGl;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+    renderer.setSize(
+      container.clientWidth || window.innerWidth,
+      container.clientHeight || window.innerHeight
+    );
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
@@ -928,7 +1163,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
       160
     );
 
-    // Post-Processing Pipeline: RenderPass -> CognitiveFatigueShader (Single-Pass ToneMap + Grayscale Desaturation)
+    // Post-Processing Pipeline: RenderPass -> CognitiveFatigueShader (Selective Bloom + Desaturation + Modal DOF)
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
@@ -936,12 +1171,11 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     const fatiguePass = new ShaderPass(CognitiveFatigueShader);
     composer.addPass(fatiguePass);
 
-    // 2. Studio Environment Reflections (RoomEnvironment)
+    // HDRI-equivalent Procedural Studio Environment (RoomEnvironment)
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     pmremGenerator.dispose();
 
-    // 3. Balanced Warm/Cool Studio Lighting Rig
     const hemiLight = new THREE.HemisphereLight(0x9ec5fe, 0x243b2b, 0.95);
     scene.add(hemiLight);
 
@@ -968,12 +1202,12 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
     const pathTextures = createProceduralPathTexture(maxAnisotropy);
     const particlePool = createParticlePool(scene);
+    const sparkleField = createAmbientSparkleField(scene);
 
-    // Build Protagonist Boy
+    // Build Protagonist Boy with AnimationMixer Blend Tree
     const playerRig = buildPlayerBoyMesh();
     scene.add(playerRig.root);
 
-    // Stage dynamic references
     let currentEnvGroup: THREE.Group | null = null;
     let currentPortalRig: ReturnType<typeof buildCajalPortalGroup> | null = null;
     let pickups: ActivePickup[] = [];
@@ -983,15 +1217,20 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
     let hitstopTimer = 0;
     let cameraTrauma = 0;
+    let bloomSurgeTimer = 0;
     let stageElapsedTime = 0;
     let portalWasUnlocked = false;
     let cajalBannerText = currentLevel.cajalIntroQuote;
     let cajalBannerType: HudSnapshot['cajalBannerType'] = 'intro';
     let lastHudEmitTime = 0;
     let outcomeTriggered = false;
+    let currentAnimState: HudSnapshot['animState'] = 'Idle';
+
     const initialFatigue = calculateCognitiveFatigue(playerState.brainPower);
     let currentDesaturation = initialFatigue.desaturation;
     let currentVignette = initialFatigue.vignette;
+    let currentBloom = initialFatigue.bloomStrength;
+    let currentModalBlur = 0;
 
     const emitHud = (force = false, nowSec = 0) => {
       if (!force && nowSec - lastHudEmitTime < 0.1) return;
@@ -1000,6 +1239,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
       onHudUpdateRef.current({
         brainPower: Math.round(playerState.brainPower),
         cognitiveFatiguePct: fatiguePercent,
+        animState: currentAnimState,
         vitality: playerState.vitality,
         maxVitality: playerState.maxVitality,
         speedModifier: playerState.speedModifier,
@@ -1022,14 +1262,18 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
       const startFatigue = calculateCognitiveFatigue(playerState.brainPower);
       currentDesaturation = startFatigue.desaturation;
       currentVignette = startFatigue.vignette;
+      currentBloom = startFatigue.bloomStrength;
       fatiguePass.uniforms.uDesaturation.value = currentDesaturation;
       fatiguePass.uniforms.uVignette.value = currentVignette;
+      fatiguePass.uniforms.uBloomStrength.value = currentBloom;
       container.dataset.desaturation = String(startFatigue.fatiguePercent);
       hitstopTimer = 0;
       cameraTrauma = 0;
+      bloomSurgeTimer = 0;
       stageElapsedTime = 0;
       portalWasUnlocked = false;
       outcomeTriggered = false;
+      currentAnimState = 'Idle';
       cajalBannerText = currentLevel.cajalIntroQuote;
       cajalBannerType = 'intro';
 
@@ -1049,16 +1293,15 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
       currentEnvGroup = buildLevelEnvironment(scene, currentLevel, pathTextures);
       currentPortalRig = buildCajalPortalGroup(currentLevel.portalPosition);
+      currentPortalRig.updatePortalSign(playerState.brainPower, false);
       scene.add(currentPortalRig.group);
 
       playerRig.root.position.set(playerState.x, 0, playerState.z);
       playerRig.root.rotation.y = playerState.facingAngle;
 
-      // Initialize camera framing immediately behind the player so frame 0 is well-composed
       camera.position.set(playerState.x * 0.55, 7.6, playerState.z + 10.2);
       camera.lookAt(playerState.x * 0.35, 1.4, playerState.z - 4.5);
 
-      // Spawn Healthy Pickups along the avenue and side alcoves (open path guaranteed)
       const pickupLayout: Array<{ subType: ItemSubType; x: number; z: number }> = [
         { subType: 'water', x: 0, z: 16.2 },
         { subType: 'apple', x: -2.6, z: 9.5 },
@@ -1090,7 +1333,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
         });
       });
 
-      // Spawn Hazards with 3 distinct movement policies and scaled difficulty per level
       const hazardConfigs: Array<{
         subType: ItemSubType;
         policy: HazardPolicy;
@@ -1158,7 +1400,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     rebuildStageRef.current = buildStageEntities;
     buildStageEntities(levelIndexRef.current);
 
-    // Unified Keyboard Input Hub (held vs edge-triggered justPressed)
     const keysHeld = new Set<string>();
     let dashJustPressed = false;
 
@@ -1200,7 +1441,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     };
     window.addEventListener('resize', onResize);
 
-    // Software WebGL frame pacing helper per Three.js skill
     let frameId = 0;
     let unmounted = false;
 
@@ -1233,37 +1473,54 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
       const mode = appStateRef.current;
 
-      // Update Neural Halo visual scale & brightness from BrainPower
+      // Update Neural Halo visual scale & Selective Bloom brightness from BrainPower
       const bpRatio = playerState.brainPower / 100;
-      const haloScale = 0.65 + bpRatio * 0.75;
+      const haloScale = 0.65 + bpRatio * 0.85;
       playerRig.neuralHalo.scale.setScalar(haloScale);
-      playerRig.neuralHalo.rotation.y += dt * (1.2 + bpRatio * 2.5);
-      playerRig.haloMat.emissiveIntensity = 0.4 + bpRatio * 1.4;
+      playerRig.neuralHalo.rotation.y += dt * (1.4 + bpRatio * 2.8);
+      playerRig.haloMat.emissiveIntensity = 0.6 + bpRatio * 1.8 + (bloomSurgeTimer > 0 ? 1.2 : 0);
 
-      // Animate Cajal Portal Vortex
+      // Animate Cajal Portal Vortex & Diegetic 3D Sign
       if (currentPortalRig) {
         const unlocked = playerState.brainPower >= currentLevel.targetBrainPower;
         currentPortalRig.vortexRing.rotation.z += dt * (unlocked ? 2.8 : 0.9);
         currentPortalRig.vortexMat.color.setHex(unlocked ? 0xffd166 : 0x38bdf8);
         currentPortalRig.vortexMat.emissive.setHex(unlocked ? 0xf59e0b : 0x0284c7);
-        currentPortalRig.vortexMat.emissiveIntensity = unlocked ? 1.5 : 0.55;
+        currentPortalRig.vortexMat.emissiveIntensity = unlocked ? 1.85 : 0.7;
+        currentPortalRig.updatePortalSign(playerState.brainPower, unlocked);
       }
 
+      // Animate Ambient 3D Synaptic Sparkles Field
+      for (let i = 0; i < sparkleField.count; i++) {
+        const i3 = i * 3;
+        const phase = sparkleField.phases[i] + elapsed * 2.2;
+        const sx = sparkleField.basePositions[i3] + Math.sin(phase) * 0.25;
+        const sy = sparkleField.basePositions[i3 + 1] + Math.cos(phase * 1.3) * 0.22;
+        const sz = sparkleField.basePositions[i3 + 2];
+        const pulseScale = 0.55 + (Math.sin(phase * 2.0) + 1) * 0.35;
+        _vec3A.set(sx, sy, sz);
+        _quat.identity();
+        _scaleVec.setScalar(pulseScale);
+        _mat4.compose(_vec3A, _quat, _scaleVec);
+        sparkleField.mesh.setMatrixAt(i, _mat4);
+      }
+      sparkleField.mesh.instanceMatrix.needsUpdate = true;
+
       if (mode === 'title') {
-        // Live 3D World Camera Tour on Title Screen
         const tourAngle = elapsed * 0.22;
         camTargetPos.set(Math.sin(tourAngle) * 14, 8.5, 10 + Math.cos(tourAngle) * 12);
         camLookTarget.set(0, 1.8, -6);
         camera.position.lerp(camTargetPos, 1 - Math.exp(-3.5 * dt));
         camera.lookAt(camLookTarget);
+        playerRig.mixer.update(dt);
       } else if (mode === 'playing') {
         stageElapsedTime += dt;
+        bloomSurgeTimer = Math.max(0, bloomSurgeTimer - dt);
 
-        // Tick hitstop freeze timer
+        // 50ms Hit Stop on hazard collision
         if (hitstopTimer > 0) {
           hitstopTimer = Math.max(0, hitstopTimer - dt);
         } else {
-          // Read keyboard + virtual touch controls
           const kRight = keysHeld.has('KeyD') || keysHeld.has('ArrowRight') ? 1 : 0;
           const kLeft = keysHeld.has('KeyA') || keysHeld.has('ArrowLeft') ? 1 : 0;
           const kDown = keysHeld.has('KeyS') || keysHeld.has('ArrowDown') ? 1 : 0;
@@ -1277,14 +1534,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
           if (useDash && playerState.dashCooldown <= 0) {
             soundEngine.playDash();
-            spawnParticleBurst(
-              particlePool,
-              playerState.x,
-              1.0,
-              playerState.z,
-              0x38bdf8,
-              10
-            );
+            spawnParticleBurst(particlePool, playerState.x, 1.0, playerState.z, 0x38bdf8, 12);
           }
 
           playerState = stepPlayerKinematics(
@@ -1294,7 +1544,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
             { minX: -7.5, maxX: 7.5, minZ: -21.5, maxZ: 20.5 }
           );
 
-          // Sync boy mesh position, rotation, and gait-synced limb swing
           playerRig.root.position.set(playerState.x, 0, playerState.z);
           playerRig.root.rotation.y = THREE.MathUtils.damp(
             playerRig.root.rotation.y,
@@ -1303,15 +1552,23 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
             dt
           );
 
+          // Update Skeletal AnimationMixer Blend Tree (Idle, Run, Hit, Victory)
           const speedMag = Math.hypot(playerState.vx, playerState.vz);
-          const gaitPhase = elapsed * 10;
-          const swingAmp = Math.min(0.65, speedMag * 0.065);
-          playerRig.leftLeg.rotation.x = Math.sin(gaitPhase) * swingAmp;
-          playerRig.rightLeg.rotation.x = -Math.sin(gaitPhase) * swingAmp;
-          playerRig.leftArm.rotation.x = -Math.sin(gaitPhase) * swingAmp;
-          playerRig.rightArm.rotation.x = Math.sin(gaitPhase) * swingAmp;
+          const isHitActive = playerState.invulnerableTimer > 0.65;
+          const isVictoryActive = outcomeTriggered && playerState.brainPower >= 100;
+          const blend = computeAnimationBlendWeights(
+            speedMag,
+            playerState.baseSpeed,
+            isHitActive,
+            isVictoryActive
+          );
+          currentAnimState = blend.dominantState;
+          playerRig.actions.idle.setEffectiveWeight(blend.idle);
+          playerRig.actions.run.setEffectiveWeight(blend.run);
+          playerRig.actions.hit.setEffectiveWeight(blend.hit);
+          playerRig.actions.victory.setEffectiveWeight(blend.victory);
+          playerRig.mixer.update(dt);
 
-          // Flash player jacket during post-hit invulnerability
           playerRig.bodyMat.emissive.setHex(
             playerState.invulnerableTimer > 0 && Math.floor(elapsed * 16) % 2 === 0
               ? 0xef4444
@@ -1337,18 +1594,22 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
                 playerState = nextState;
                 item.active = false;
                 item.group.visible = false;
-                item.respawnTimer = 6.5; // Respawns so player can always reach 100%
+                item.respawnTimer = 6.5;
+                bloomSurgeTimer = 1.25; // High-intensity Selective Bloom surge when Neural Crown grows!
 
                 cajalBannerText = item.spec.scientificNote;
                 cajalBannerType = 'healthy';
                 soundEngine.playHealthyPickup(playerState.brainPower);
+
+                // Golden 28-particle burst on Tratado de Histología (science_book), 16 on other healthy items
+                const burstCount = item.spec.subType === 'science_book' ? 28 : 16;
                 spawnParticleBurst(
                   particlePool,
                   item.baseX,
-                  1.1,
+                  1.15,
                   item.baseZ,
                   0xffd166,
-                  16
+                  burstCount
                 );
 
                 if (
@@ -1357,7 +1618,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
                 ) {
                   portalWasUnlocked = true;
                   cajalBannerText =
-                    '¡Red Neuronal al 100%! El Portal Sináptico de Cajal está activo al final del paseo.';
+                    '¡Red Neuronal al 100%! El Portal Sináptico de Cajal brilla al final del paseo.';
                   cajalBannerType = 'portal';
                   soundEngine.playPortalReady();
                 }
@@ -1372,7 +1633,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
             const distToPlayer = Math.hypot(playerState.x - haz.x, playerState.z - haz.z);
 
             if (haz.policy === 'chaser_smoke') {
-              // Policy 1: Tobacco Smoke Chaser with windup lunging telegraph
               if (haz.windupTimer > 0) {
                 haz.windupTimer -= dt;
                 haz.telegraphMat.opacity = 0.75;
@@ -1395,9 +1655,8 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
                 haz.telegraphMat.opacity = 0.22;
                 haz.telegraphRing.scale.setScalar(1.0);
                 if (distToPlayer < 8.5 && haz.cooldownTimer <= 0) {
-                  haz.windupTimer = 0.48; // Visible telegraph before lunging
+                  haz.windupTimer = 0.48;
                 } else {
-                  // Gentle patrol drift around home
                   const targetX = haz.homeX + Math.sin(elapsed * 1.3) * 2.2;
                   const targetZ = haz.homeZ + Math.cos(elapsed * 1.1) * 1.8;
                   haz.x = THREE.MathUtils.damp(haz.x, targetX, 3.0, dt);
@@ -1405,7 +1664,6 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
                 }
               }
             } else if (haz.policy === 'charger_junk') {
-              // Policy 2: Line-of-Sight Horizontal Lane Charger
               const zDiff = Math.abs(playerState.z - haz.z);
               if (haz.windupTimer > 0) {
                 haz.windupTimer -= dt;
@@ -1427,13 +1685,12 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
                 haz.telegraphMat.opacity = 0.22;
                 haz.telegraphRing.scale.setScalar(1.0);
                 if (zDiff < 2.8 && haz.cooldownTimer <= 0) {
-                  haz.windupTimer = 0.55; // Telegraph before lane charge
+                  haz.windupTimer = 0.55;
                 } else {
                   haz.x = haz.homeX + Math.sin(elapsed * 1.5) * 3.2;
                 }
               }
             } else {
-              // Policy 3: Alcohol Toxin Figure-8 Orbiter with periodic pulse telegraph
               haz.orbitAngle += dt * 1.35 * difficultyMult;
               haz.x = haz.homeX + Math.sin(haz.orbitAngle) * 3.8;
               haz.z = haz.homeZ + Math.sin(haz.orbitAngle * 2) * 2.2;
@@ -1446,17 +1703,16 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
             haz.group.position.set(haz.x, 0, haz.z);
             haz.group.rotation.y += dt * 2.0;
 
-            // Check collision with player
             if (isCircleCollision(playerState.x, playerState.z, 0.78, haz.x, haz.z, 0.75)) {
               const { nextState, applied } = applyItemCollision(playerState, haz.spec);
               if (applied) {
                 playerState = nextState;
-                hitstopTimer = 0.055; // 55ms simulation hitstop on heavy hazard impact
-                cameraTrauma = 0.55;
+                hitstopTimer = 0.05; // 50ms Hit Stop before desaturation ramps up
+                cameraTrauma = 0.6;
                 cajalBannerText = haz.spec.scientificNote;
                 cajalBannerType = 'hazard';
                 soundEngine.playHazardHit();
-                spawnParticleBurst(particlePool, haz.x, 1.0, haz.z, 0xef4444, 20);
+                spawnParticleBurst(particlePool, haz.x, 1.0, haz.z, 0xef4444, 22);
                 emitHud(true, elapsed);
               }
             }
@@ -1467,6 +1723,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
           if (outcome !== 'playing' && !outcomeTriggered) {
             outcomeTriggered = true;
             if (outcome === 'victory') {
+              currentAnimState = 'Victory';
               soundEngine.playVictoryFanfare();
             } else {
               soundEngine.playDefeatSting();
@@ -1476,6 +1733,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
             onStageEndRef.current(outcome, {
               brainPower: Math.round(playerState.brainPower),
               cognitiveFatiguePct: endFatigue.fatiguePercent,
+              animState: currentAnimState,
               vitality: playerState.vitality,
               maxVitality: playerState.maxVitality,
               speedModifier: playerState.speedModifier,
@@ -1495,7 +1753,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
         // Exponentially damped follow camera with decaying trauma shake
         cameraTrauma = Math.max(0, cameraTrauma - dt * 1.8);
-        const shakeOffset = cameraTrauma * cameraTrauma * 0.45;
+        const shakeOffset = cameraTrauma * cameraTrauma * 0.48;
         const shakeX = Math.sin(elapsed * 48) * shakeOffset;
         const shakeY = Math.cos(elapsed * 54) * shakeOffset;
 
@@ -1509,7 +1767,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
         emitHud(false, elapsed);
       }
 
-      // Update pooled InstancedMesh particles in-place (Zero GC)
+      // Update pooled InstancedMesh burst particles in-place (Zero GC)
       let anyParticleAlive = false;
       for (let i = 0; i < particlePool.count; i++) {
         if (particlePool.lives[i] > 0) {
@@ -1519,7 +1777,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
           particlePool.positions[i3] += particlePool.velocities[i3] * dt;
           particlePool.positions[i3 + 1] += particlePool.velocities[i3 + 1] * dt;
           particlePool.positions[i3 + 2] += particlePool.velocities[i3 + 2] * dt;
-          particlePool.velocities[i3 + 1] -= 6.5 * dt; // Gravity
+          particlePool.velocities[i3 + 1] -= 6.5 * dt;
 
           const lifeRatio = particlePool.lives[i] / particlePool.maxLives[i];
           const s = particlePool.scales[i] * lifeRatio;
@@ -1538,8 +1796,11 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
         particlePool.mesh.instanceMatrix.needsUpdate = true;
       }
 
-      // Update Post-Processing Cognitive Fatigue Desaturation Shader Uniforms
+      // Update Post-Processing Uniforms: Desaturation + Selective Synaptic Bloom + Modal DOF Blur
       const targetFatigue = calculateCognitiveFatigue(playerState.brainPower);
+      const targetBloom = targetFatigue.bloomStrength + (bloomSurgeTimer > 0 ? 0.55 : 0);
+      const targetModalBlur = mode === 'paused' || mode === 'gameover' ? 0.75 : 0.0;
+
       currentDesaturation = THREE.MathUtils.damp(
         currentDesaturation,
         targetFatigue.desaturation,
@@ -1552,10 +1813,17 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
         6.5,
         dt
       );
+      currentBloom = THREE.MathUtils.damp(currentBloom, targetBloom, 8.0, dt);
+      currentModalBlur = THREE.MathUtils.damp(currentModalBlur, targetModalBlur, 8.0, dt);
+
       fatiguePass.uniforms.uDesaturation.value = currentDesaturation;
       fatiguePass.uniforms.uVignette.value = currentVignette;
+      fatiguePass.uniforms.uBloomStrength.value = currentBloom;
+      fatiguePass.uniforms.uModalBlur.value = currentModalBlur;
+
       if (container) {
         container.dataset.desaturation = String(Math.round(currentDesaturation * 100));
+        container.dataset.animState = currentAnimState;
       }
 
       composer.render();
@@ -1587,6 +1855,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
       ref={mountRef}
       data-testid="webgl-canvas-container"
       data-desaturation="80"
+      data-anim-state="Idle"
       className="fixed inset-0 w-full h-full overflow-hidden bg-[#0d1117]"
     />
   );

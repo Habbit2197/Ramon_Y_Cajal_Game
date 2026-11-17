@@ -4,11 +4,13 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Canvas3D, GameAppState, HudSnapshot } from './components/Canvas3D';
 import { GameHud } from './components/GameHud';
 import { GddModal } from './components/GddModal';
 import { LEVELS } from './game/rules';
 import { soundEngine } from './game/sound';
+import { useGameStore } from './store/useGameStore';
 
 const INITIAL_HUD: HudSnapshot = {
   brainPower: 20,
@@ -26,6 +28,7 @@ const INITIAL_HUD: HudSnapshot = {
   cajalBannerType: 'intro',
   elapsedTime: 0,
   dashReady: true,
+  animState: 'Idle',
 };
 
 export default function App() {
@@ -75,6 +78,7 @@ export default function App() {
 
   const handleHudUpdate = useCallback((snapshot: HudSnapshot) => {
     setHud(snapshot);
+    useGameStore.getState().setBrainPower(snapshot.brainPower);
   }, []);
 
   const handleStageEnd = useCallback(

@@ -390,19 +390,59 @@ export function evaluateStageOutcome(
 }
 
 /**
- * Calculates post-processing shader uniforms (grayscale desaturation & vignette)
- * proportional to the reduction in BrainPower (100% BrainPower -> 0% desaturation,
- * 0% BrainPower -> 100% grayscale desaturation).
+ * Calculates post-processing shader uniforms (grayscale desaturation, vignette & synaptic bloom)
+ * proportional to BrainPower:
+ * - 100% BrainPower -> 0% desaturation, maximum synaptic bloom (0.85)
+ * - 0% BrainPower   -> 100% grayscale desaturation, minimal bloom (0.05)
  */
 export function calculateCognitiveFatigue(brainPower: number): {
   desaturation: number;
   vignette: number;
+  bloomStrength: number;
   fatiguePercent: number;
 } {
   const clampedBp = Math.max(0, Math.min(100, brainPower));
   const desaturation = Number(((100 - clampedBp) / 100).toFixed(4));
   const vignette = Number((desaturation * 0.65).toFixed(4));
+  const bloomStrength = Number((0.1 + (clampedBp / 100) * 0.75).toFixed(4));
   const fatiguePercent = Math.round(desaturation * 100);
-  return { desaturation, vignette, fatiguePercent };
+  return { desaturation, vignette, bloomStrength, fatiguePercent };
 }
+
+export interface AnimationBlendWeights {
+  idle: number;
+  run: number;
+  hit: number;
+  victory: number;
+  dominantState: 'Idle' | 'Run' | 'Hit' | 'Victory';
+}
+
+/**
+ * Computes normalized skeletal AnimationMixer Blend Tree weights (Idle, Run, Hit, Victory)
+ * from player movement speed, hazard impact state, and stage outcome.
+ */
+export function computeAnimationBlendWeights(
+  speed: number,
+  baseSpeed: number,
+  isHit: boolean,
+  isVictory: boolean
+): AnimationBlendWeights {
+  if (isVictory) {
+    return { idle: 0, run: 0, hit: 0, victory: 1, dominantState: 'Victory' };
+  }
+  if (isHit) {
+    return { idle: 0.15, run: 0, hit: 0.85, victory: 0, dominantState: 'Hit' };
+  }
+  const normalizedSpeed = Math.max(0, Math.min(1, speed / Math.max(1, baseSpeed * 0.85)));
+  const runWeight = Number(normalizedSpeed.toFixed(3));
+  const idleWeight = Number((1 - runWeight).toFixed(3));
+  return {
+    idle: idleWeight,
+    run: runWeight,
+    hit: 0,
+    victory: 0,
+    dominantState: runWeight >= 0.35 ? 'Run' : 'Idle',
+  };
+}
+
 
