@@ -1,81 +1,118 @@
 /**
- * Scene.tsx
- * Escena R3F principal del juego Cajal.
+ * Scene.tsx — Escena R3F del Agile Shooter Cajal
  *
- * Pipeline declarativo:
- *  - Iluminación PBR (ambient + directional con sombras)
- *  - <Player> con CharacterModel animado
- *  - Suelo PBR procedural
- *  - ContactShadows suaves
- *  - OrbitControls (dev) + seguimiento de cámara
+ * Arquitectura:
+ *   <Canvas> (en Canvas3D o App)
+ *     <Physics gravity={[0,0,0]}>   ← sin gravedad (top-down)
+ *       <Player />
+ *       <ProjectileSystem />
+ *       <EnemySystem />
+ *       <Arena />
+ *     </Physics>
+ *     <Lights />
+ *     <Effects />
  */
 
-import React, { useMemo } from 'react';
-import { ContactShadows, Environment, OrbitControls } from '@react-three/drei';
+import React from 'react';
+import { Physics } from '@react-three/rapier';
+import { Environment, ContactShadows, OrbitControls } from '@react-three/drei';
+import { Player } from './Player';
+import { ProjectileSystem } from './ProjectileSystem';
+import { EnemySystem } from './EnemySystem';
 import { useGameStore } from '../../store/useGameStore';
 import { FATIGUE_FRAGMENT_SHADER } from '../../shaders/FatigueShader';
-import { Player } from './Player';
 
-// ─── Spec exportada (referencia arquitectural para el GDD) ────────────────────
+export const R3F_SCENE_SOURCE = 'Agile Shooter: Physics<Player+Projectiles+Enemies> / no gravity';
 
-export const R3F_SCENE_SOURCE = `
-Scene → <ambientLight> + <directionalLight castShadow>
-      → <Environment preset="sunset" />
-      → <Player position={[0,0,0]} />  (CharacterModel + Blend Tree idle/run)
-      → <mesh> suelo PBR 50x50
-      → <ContactShadows>
-      → <OrbitControls>
-      → EffectComposer → CognitiveFatigueEffect (uDesaturation ∝ 1 - brainPower/100)
-`;
+// ─── Arena (suelo hexagonal estilizado) ──────────────────────────────────────
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+const Arena: React.FC = () => (
+  <>
+    {/* Suelo principal */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <planeGeometry args={[30, 22]} />
+      <meshStandardMaterial
+        color="#0a0f1a"
+        roughness={0.8}
+        metalness={0.3}
+        emissive="#001133"
+        emissiveIntensity={0.4}
+      />
+    </mesh>
+
+    {/* Grid decorativo */}
+    <gridHelper args={[30, 22, '#1e3a5f', '#0d2040']} position={[0, 0.01, 0]} />
+
+    {/* Bordes del arena */}
+    {[-15, 15].map((x) => (
+      <mesh key={`wall-x-${x}`} position={[x, 0.5, 0]}>
+        <boxGeometry args={[0.2, 1, 22]} />
+        <meshStandardMaterial color="#1e40af" emissive="#1e40af" emissiveIntensity={1} />
+      </mesh>
+    ))}
+    {[-11, 11].map((z) => (
+      <mesh key={`wall-z-${z}`} position={[0, 0.5, z]}>
+        <boxGeometry args={[30, 1, 0.2]} />
+        <meshStandardMaterial color="#1e40af" emissive="#1e40af" emissiveIntensity={1} />
+      </mesh>
+    ))}
+  </>
+);
+
+// ─── Luces de la escena ───────────────────────────────────────────────────────
+
+const Lights: React.FC = () => (
+  <>
+    <ambientLight intensity={0.3} color="#1a2a4a" />
+    <directionalLight
+      castShadow
+      position={[5, 12, 8]}
+      intensity={1.2}
+      color="#ffffff"
+      shadow-mapSize={[1024, 1024]}
+    />
+    {/* Luces de acento de colores para el feel de sci-fi */}
+    <pointLight position={[-10, 3, -8]} color="#0033ff" intensity={3} distance={15} />
+    <pointLight position={[10, 3, 8]}  color="#00ffaa" intensity={3} distance={15} />
+  </>
+);
+
+// ─── Escena completa ──────────────────────────────────────────────────────────
 
 export const Scene: React.FC = () => {
-  const brainPower = useGameStore((state) => state.brainPower);
+  const brainPower = useGameStore((s) => s.brainPower);
   const uDesaturation = Math.max(0, Math.min(1, 1 - brainPower / 100));
 
   return (
     <group name="R3FSceneRoot" userData={{ uDesaturation, shader: FATIGUE_FRAGMENT_SHADER }}>
-      {/* Iluminación base */}
-      <ambientLight intensity={0.45} />
-      <directionalLight
-        castShadow
-        position={[8, 15, 10]}
-        intensity={1.6}
-        shadow-mapSize={[2048, 2048] as [number, number]}
-      />
+      <Lights />
+      <Environment preset="night" background={false} />
 
-      {/* Iluminación HDRI para reflejos PBR */}
-      <Environment preset="sunset" background={false} />
+      {/* Motor de físicas sin gravedad (top-down shooter) */}
+      <Physics gravity={[0, 0, 0]} debug={false}>
+        <Player position={[0, 0.5, 0]} />
+        <ProjectileSystem />
+        <EnemySystem />
+      </Physics>
 
-      {/* Personaje Principal con animaciones Idle/Run */}
-      <Player position={[0, 0, 0]} />
+      {/* Arena estática (no necesita físicas) */}
+      <Arena />
 
-      {/* Suelo PBR */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[50, 50]} />
-        <meshPhysicalMaterial
-          color="#1e293b"
-          roughness={0.65}
-          metalness={0.1}
-          clearcoat={0.2}
-        />
-      </mesh>
-
-      {/* Sombras de contacto suaves */}
       <ContactShadows
-        position={[0, 0.01, 0]}
-        opacity={0.65}
-        scale={14}
-        blur={2.2}
-        far={4.5}
+        position={[0, 0.02, 0]}
+        opacity={0.5}
+        scale={20}
+        blur={2}
+        far={3}
       />
 
-      {/* Controles de cámara (desactivar en producción si se usa cámara de seguimiento) */}
       <OrbitControls
         makeDefault
+        target={[0, 0, 0]}
+        minDistance={8}
+        maxDistance={22}
+        maxPolarAngle={Math.PI / 2.5}
         enablePan={false}
-        maxPolarAngle={Math.PI / 2 - 0.05}
       />
     </group>
   );
