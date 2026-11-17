@@ -1,0 +1,118 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  LEVELS,
+  ITEM_CATALOG,
+  createInitialPlayerState,
+  applyItemCollision,
+  stepPlayerKinematics,
+  isCircleCollision,
+  evaluateStageOutcome,
+  calculateCognitiveFatigue,
+} from './rules';
+
+test('calculateCognitiveFatigue computes grayscale desaturation proportional to BrainPower reduction', () => {
+  const full = calculateCognitiveFatigue(100);
+  assert.equal(full.desaturation, 0);
+  assert.equal(full.fatiguePercent, 0);
+
+  const half = calculateCognitiveFatigue(50);
+  assert.equal(half.desaturation, 0.5);
+  assert.equal(half.fatiguePercent, 50);
+
+  const initialLvl1 = calculateCognitiveFatigue(20);
+  assert.equal(initialLvl1.desaturation, 0.8);
+  assert.equal(initialLvl1.fatiguePercent, 80);
+
+  const depleted = calculateCognitiveFatigue(0);
+  assert.equal(depleted.desaturation, 1);
+  assert.equal(depleted.fatiguePercent, 100);
+});
+
+test('createInitialPlayerState initializes with level spawn and initial BrainPower', () => {
+  const state = createInitialPlayerState(LEVELS[0]);
+  assert.equal(state.brainPower, 20);
+  assert.equal(state.vitality, 3);
+  assert.equal(state.speedModifier, 1.0);
+  assert.equal(state.x, LEVELS[0].playerSpawn.x);
+  assert.equal(state.z, LEVELS[0].playerSpawn.z);
+});
+
+test('applyItemCollision increases BrainPower and speed on healthy items and clamps at 100%', () => {
+  let state = createInitialPlayerState(LEVELS[0]); // 20%
+  const { nextState: afterWater, applied } = applyItemCollision(state, ITEM_CATALOG.water);
+  assert.equal(applied, true);
+  assert.equal(afterWater.brainPower, 35);
+  assert.equal(afterWater.speedModifier, 1.28);
+  assert.equal(afterWater.synapsesCollected, 1);
+
+  // Clamp at 100%
+  let nearFull = { ...afterWater, brainPower: 90 };
+  const { nextState: capped } = applyItemCollision(nearFull, ITEM_CATALOG.science_book);
+  assert.equal(capped.brainPower, 100);
+});
+
+test('applyItemCollision decreases BrainPower, slows movement, and grants i-frames on hazards', () => {
+  const state = createInitialPlayerState(LEVELS[0]); // 20%
+  const { nextState: hitSmoke, applied } = applyItemCollision(state, ITEM_CATALOG.tobacco_smoke);
+  assert.equal(applied, true);
+  assert.equal(hitSmoke.brainPower, 6);
+  assert.equal(hitSmoke.vitality, 2);
+  assert.equal(hitSmoke.speedModifier, 0.52);
+  assert.ok(hitSmoke.invulnerableTimer > 0);
+
+  // Subsequent hazard collision during i-frames should be ignored
+  const { nextState: ignoredHit, applied: secondApplied } = applyItemCollision(
+    hitSmoke,
+    ITEM_CATALOG.alcohol_toxin
+  );
+  assert.equal(secondApplied, false);
+  assert.equal(ignoredHit.brainPower, 6);
+  assert.equal(ignoredHit.vitality, 2);
+});
+
+test('stepPlayerKinematics advances player position and resets expired speed modifiers', () => {
+  let state = createInitialPlayerState(LEVELS[0]);
+  state = { ...state, speedModifier: 0.52, effectTimer: 0.02 };
+
+  const moved = stepPlayerKinematics(
+    state,
+    { moveX: 0, moveZ: -1, dashJustPressed: true },
+    0.04
+  );
+  // Effect timer expired -> speedModifier resets to 1.0
+  assert.equal(moved.effectTimer, 0);
+  assert.equal(moved.speedModifier, 1.0);
+  assert.ok(moved.z < state.z);
+  assert.ok(moved.dashActiveTimer > 0);
+});
+
+test('isCircleCollision and evaluateStageOutcome verify victory at portal with 100% BrainPower', () => {
+  assert.equal(isCircleCollision(0, 0, 1.0, 1.2, 0, 0.5), true);
+  assert.equal(isCircleCollision(0, 0, 1.0, 5.0, 0, 0.5), false);
+
+  const level = LEVELS[0];
+  let state = createInitialPlayerState(level);
+  assert.equal(evaluateStageOutcome(state, level), 'playing');
+
+  // Move to portal with 100% BrainPower
+  state = {
+    ...state,
+    brainPower: 100,
+    x: level.portalPosition.x,
+    z: level.portalPosition.z + 1.0,
+  };
+  assert.equal(evaluateStageOutcome(state, level), 'victory');
+
+  // Vitality 0 triggers defeat
+  const defeated = { ...state, vitality: 0 };
+  assert.equal(evaluateStageOutcome(defeated, level), 'defeat');
+});
+
+test('All 3 levels include Santiago Ramon y Cajal educational completion dialogues', () => {
+  assert.equal(LEVELS.length, 3);
+  for (const lvl of LEVELS) {
+    assert.ok(lvl.cajalVictoryDialogue.length > 120);
+    assert.ok(lvl.cajalIntroQuote.length > 40);
+  }
+});
