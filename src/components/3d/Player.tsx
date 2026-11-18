@@ -1,154 +1,246 @@
 /**
- * Player.tsx — Núcleo Neuronal con RigidBody Rapier
+ * Player.tsx — Núcleo Neuronal cinemático con física Rapier
  *
- * Aspecto visual: Núcleo Neuronal con icosahedronGeometry wireframe cian
- * Físicas: RigidBody kinematicPositionBased con colliders="ball"
- * Input: WASD + joystickVector (Zustand)
- * Movimiento: ref.current.setNextKinematicTranslation()
+ * ARQUITECTURA TDD:
+ * - Avatar: Núcleo Neuronal icosaédrico con radiance HDR cian [1, 4, 5] (Bloom selectivo sin pointLights).
+ * - Físicas: RigidBody kinematicPosition con colliders="ball".
+ * - Movimiento: Conducción saltatoria con dash, i-frames de mielina y deriva de alcohol.
+ * - Sincronización: Escribe directamente en `world.player` (zero GC, ZERO llamadas a Zustand a 60 Hz).
  */
 
 import React, { useRef, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
-import { useGameStore } from '../../store/useGameStore';
+import { world } from '../../engine/world';
+import { tryDash } from '../../game/dash';
 
-// Constantes
-const MOVE_SPEED = 6.0;
-const BOUNDS = { x: 12, z: 10 };
-const ACTION_THRESHOLD = 0.05;
-
-// Scratch zero-GC
-const _moveVec = new THREE.Vector3();
+const BOUNDS = { x: 13.5, z: 9.5 };
+const _raycaster = new THREE.Raycaster();
+const _plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const _intersect = new THREE.Vector3();
+const _mouse = new THREE.Vector2();
 
 export interface PlayerProps {
   position?: [number, number, number];
 }
 
-export const Player: React.FC<PlayerProps> = ({ position = [0, 0.5, 0] }) => {
+export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
   const ref = useRef<RapierRigidBody>(null);
-  const meshGroupRef = useRef<THREE.Group>(null);
+  const nucleusRef = useRef<THREE.Group>(null);
+  const myelinSheathRef = useRef<THREE.Mesh>(null);
+  const shieldMeshRef = useRef<THREE.Mesh>(null);
+  const { camera } = useThree();
 
-  // Estado interno en refs para evitar re-renders innecesarios en el loop de 60fps
-  const posRef = useRef(new THREE.Vector3(...position));
-  const facingRef = useRef(new THREE.Vector3(0, 0, -1));
-
-  // Zustand
-  const joystickVector = useGameStore((s) => s.joystickVector);
-  const setPlayerPosition = useGameStore((s) => s.setPlayerPosition);
-
-  // Teclado
-  const keysRef = useRef<Record<string, boolean>>({
-    w: false, W: false, ArrowUp: false,
-    s: false, S: false, ArrowDown: false,
-    a: false, A: false, ArrowLeft: false,
-    d: false, D: false, ArrowRight: false,
-  });
+  const keys = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key in keysRef.current) {
-        keysRef.current[e.key] = true;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keys.current[e.code] = true;
+      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        const threat = world.grid.anyThreatWithin(world.player.x, world.player.z, 3.5, () => true);
+        tryDash(
+          {
+            x: world.player.x,
+            z: world.player.z,
+            dirX: world.player.dirX,
+            dirZ: world.player.dirZ,
+            baseSpeed: world.player.baseSpeed,
+            dashCooldown: world.player.dashCooldown,
+            dashActiveTimer: world.player.dashActiveTimer,
+            invulnerableTimer: world.player.invulnerableTimer,
+            mods: world.player.mods,
+          },
+          threat,
+          world.ranvierNodes
+        );
       }
     };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key in keysRef.current) {
-        keysRef.current[e.key] = false;
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keys.current[e.code] = false;
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      _mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      _mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      _raycaster.setFromCamera(_mouse, camera);
+      if (_raycaster.ray.intersectPlane(_plane, _intersect)) {
+        const dx = _intersect.x - world.player.x;
+        const dz = _intersect.z - world.player.z;
+        const len = Math.hypot(dx, dz) || 1;
+        world.player.aimX = dx / len;
+        world.player.aimZ = dz / len;
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+
+    const handleTouchShoot = () => {
+      // Disparo táctil gestionado en el bucle caliente de armas
+    };
+
+    const handleTouchDash = () => {
+      const threat = world.grid.anyThreatWithin(world.player.x, world.player.z, 3.5, () => true);
+      tryDash(
+        {
+          x: world.player.x,
+          z: world.player.z,
+          dirX: world.player.dirX,
+          dirZ: world.player.dirZ,
+          baseSpeed: world.player.baseSpeed,
+          dashCooldown: world.player.dashCooldown,
+          dashActiveTimer: world.player.dashActiveTimer,
+          invulnerableTimer: world.player.invulnerableTimer,
+          mods: world.player.mods,
+        },
+        threat,
+        world.ranvierNodes
+      );
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('trigger-touch-shoot', handleTouchShoot);
+    window.addEventListener('trigger-touch-dash', handleTouchDash);
+
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('trigger-touch-shoot', handleTouchShoot);
+      window.removeEventListener('trigger-touch-dash', handleTouchDash);
     };
-  }, []);
+  }, [camera]);
 
-  useFrame((_state, delta) => {
+  useFrame((st, dt) => {
     if (!ref.current) return;
+    const p = world.player;
+    const k = keys.current;
 
-    const dt = Math.min(delta, 0.05);
-    const keys = keysRef.current;
+    // 1. Lectura del input de dirección
+    let inX = 0;
+    let inZ = 0;
+    if (k['KeyW'] || k['ArrowUp']) inZ -= 1;
+    if (k['KeyS'] || k['ArrowDown']) inZ += 1;
+    if (k['KeyA'] || k['ArrowLeft']) inX -= 1;
+    if (k['KeyD'] || k['ArrowRight']) inX += 1;
 
-    // ── 1. Lectura del movimiento (WASD o joystickVector de Zustand) ─────
-    let vx = 0;
-    let vz = 0;
-    if (keys['w'] || keys['W'] || keys['ArrowUp'])    vz -= 1;
-    if (keys['s'] || keys['S'] || keys['ArrowDown'])  vz += 1;
-    if (keys['a'] || keys['A'] || keys['ArrowLeft'])  vx -= 1;
-    if (keys['d'] || keys['D'] || keys['ArrowRight']) vx += 1;
-
-    // Sumar vector del joystick táctil de Zustand
-    vx += joystickVector.x;
-    vz += joystickVector.z;
-
-    _moveVec.set(vx, 0, vz);
-    const mag = _moveVec.length();
-    if (mag > 1) {
-      _moveVec.divideScalar(mag);
+    const len = Math.hypot(inX, inZ);
+    if (len > 0) {
+      p.dirX = inX / len;
+      p.dirZ = inZ / len;
     }
 
-    if (mag > ACTION_THRESHOLD) {
-      facingRef.current.copy(_moveVec).normalize();
+    // 2. Velocidad con modificadores, dash y debuffs educativos
+    let currentSpeed = p.baseSpeed * p.mods.speedMult;
+    if (p.dashActiveTimer > 0) {
+      currentSpeed *= 3.2; // Multiplicador de dash
+    }
+    if (p.smokeSlowTimer > 0) {
+      currentSpeed *= 0.65; // Debuff de humo/tabaco
     }
 
-    // ── 2. Calcular nueva posición delimitada en la arena ────────────────
-    posRef.current.x = THREE.MathUtils.clamp(
-      posRef.current.x + _moveVec.x * MOVE_SPEED * dt,
-      -BOUNDS.x,
-      BOUNDS.x
-    );
-    posRef.current.z = THREE.MathUtils.clamp(
-      posRef.current.z + _moveVec.z * MOVE_SPEED * dt,
-      -BOUNDS.z,
-      BOUNDS.z
-    );
+    const targetVx = len > 0 ? p.dirX * currentSpeed : 0;
+    const targetVz = len > 0 ? p.dirZ * currentSpeed : 0;
 
-    // ── 3. Actualizar la posición kinematic usando ref.current ──────────
-    ref.current.setNextKinematicTranslation({
-      x: posRef.current.x,
-      y: posRef.current.y,
-      z: posRef.current.z,
-    });
+    // Inercia (deriva por alcohol): el cerebelo pierde control de frenado inmediato
+    const lerpRate = p.inertiaDrag > 0 ? 3.0 : 18.0;
+    p.vx = THREE.MathUtils.damp(p.vx, targetVx, lerpRate, dt);
+    p.vz = THREE.MathUtils.damp(p.vz, targetVz, lerpRate, dt);
 
-    // Sincronizar posición con Zustand para el sistema de proyectiles y enemigos
-    setPlayerPosition([posRef.current.x, posRef.current.y, posRef.current.z]);
+    // 3. Integración de posición y límites de la arena
+    p.x = THREE.MathUtils.clamp(p.x + p.vx * dt, -BOUNDS.x, BOUNDS.x);
+    p.z = THREE.MathUtils.clamp(p.z + p.vz * dt, -BOUNDS.z, BOUNDS.z);
 
-    // ── 4. Rotación y pulsación sutil del Núcleo Neuronal ────────────────
-    if (meshGroupRef.current) {
-      const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.05;
-      meshGroupRef.current.scale.setScalar(pulse);
-      meshGroupRef.current.rotation.y += dt * 1.5;
-      meshGroupRef.current.rotation.x += (-_moveVec.z * 0.2 - meshGroupRef.current.rotation.x) * 0.1;
-      meshGroupRef.current.rotation.z += (-_moveVec.x * 0.2 - meshGroupRef.current.rotation.z) * 0.1;
+    ref.current.setNextKinematicTranslation({ x: p.x, y: 0.5, z: p.z });
+
+    // 4. Timers de dash, invulnerabilidad e inercia
+    if (p.dashActiveTimer > 0) p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);
+    if (p.dashCooldown > 0) p.dashCooldown = Math.max(0, p.dashCooldown - dt);
+    if (p.invulnerableTimer > 0) p.invulnerableTimer = Math.max(0, p.invulnerableTimer - dt);
+    if (p.inertiaDrag > 0) p.inertiaDrag = Math.max(0, p.inertiaDrag - dt);
+    if (p.smokeSlowTimer > 0) p.smokeSlowTimer = Math.max(0, p.smokeSlowTimer - dt);
+
+    // 5. Animación del núcleo neuronal
+    if (nucleusRef.current) {
+      const pulse = 1.0 + Math.sin(st.clock.elapsedTime * 4.0) * 0.06;
+      nucleusRef.current.scale.set(pulse, pulse, pulse);
+      nucleusRef.current.rotation.y += dt * 1.8;
+      nucleusRef.current.rotation.x = -p.vz * 0.05;
+      nucleusRef.current.rotation.z = -p.vx * 0.05;
+    }
+
+    // 6. Visualización de la vaina de mielina (i-frames de dash)
+    if (myelinSheathRef.current) {
+      myelinSheathRef.current.visible = p.invulnerableTimer > 0;
+      if (myelinSheathRef.current.visible) {
+        myelinSheathRef.current.rotation.y += dt * 3.5;
+      }
+    }
+
+    // 7. Escudo glial
+    if (shieldMeshRef.current) {
+      shieldMeshRef.current.visible = p.shieldActive;
     }
   });
 
   return (
     <RigidBody
       ref={ref}
-      type="kinematicPositionBased"
+      type="kinematicPosition"
       colliders="ball"
-      position={position}
+      position={[0, 0.5, 0]}
       name="player-body"
+      enabledTranslations={[true, false, true]}
+      lockRotations
     >
-      <group ref={meshGroupRef} name="PlayerNucleus">
-        {/* Núcleo Neuronal */}
+      <group ref={nucleusRef} name="PlayerNucleus">
+        {/* Núcleo Neuronal en Icosaedro HDR wireframe (Bloom selectivo) */}
         <mesh>
           <icosahedronGeometry args={[0.5, 2]} />
-          <meshStandardMaterial
-            emissive="#00ffff"
-            emissiveIntensity={2}
-            color="#ffffff"
+          <meshBasicMaterial
+            color={[0.8, 3.2, 4.5]}
             wireframe
+            toneMapped={false}
           />
         </mesh>
 
-        {/* Punto de luz puntual emisivo para iluminar la escena */}
-        <pointLight color="#00ffff" intensity={3} distance={6} decay={2} />
+        {/* Centro del soma neuronal */}
+        <mesh scale={0.4}>
+          <sphereGeometry args={[0.5, 16, 16]} />
+          <meshBasicMaterial
+            color={[1.2, 4.0, 5.0]}
+            toneMapped={false}
+          />
+        </mesh>
+
+        {/* Vaina de Mielina: halo protector blanco durante invulnerabilidad */}
+        <mesh ref={myelinSheathRef} scale={1.35} visible={false}>
+          <sphereGeometry args={[0.5, 16, 16]} />
+          <meshBasicMaterial
+            color={[4.0, 4.0, 5.0]}
+            transparent
+            opacity={0.4}
+            wireframe
+            toneMapped={false}
+          />
+        </mesh>
+
+        {/* Escudo Glial astrocítico */}
+        <mesh ref={shieldMeshRef} scale={1.6} visible={false}>
+          <ringGeometry args={[0.5, 0.6, 24]} />
+          <meshBasicMaterial
+            color={[0.5, 3.5, 1.2]}
+            transparent
+            opacity={0.65}
+            toneMapped={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
       </group>
     </RigidBody>
   );
-};
+}
 
-export default Player;
+export { PlayerBody as Player };
+export default PlayerBody;
