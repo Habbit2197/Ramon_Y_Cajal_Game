@@ -39,6 +39,7 @@ export interface GameStoreState {
   addProjectile: (p: Projectile) => void;
   removeProjectile: (id: string) => void;
   clearProjectiles: () => void;
+  shootProjectile: () => void;
 
   // ── Enemigos ──────────────────────────────────────────────────────────────
   enemies: Enemy[];
@@ -95,6 +96,30 @@ export const useGameStore = create<GameStoreState>((set) => ({
   removeProjectile: (id) =>
     set((state) => ({ projectiles: state.projectiles.filter((p) => p.id !== id) })),
   clearProjectiles: () => set({ projectiles: [] }),
+  shootProjectile: () =>
+    set((state) => {
+      const id = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const jv = state.joystickVector;
+      let dx = jv.x;
+      let dz = jv.z;
+      if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
+        dz = -1;
+      } else {
+        const len = Math.hypot(dx, dz);
+        dx /= len;
+        dz /= len;
+      }
+      return {
+        projectiles: [
+          ...state.projectiles,
+          {
+            id,
+            position: [...state.playerPosition],
+            direction: [dx, 0, dz],
+          },
+        ],
+      };
+    }),
 
   // ── Enemigos ──────────────────────────────────────────────────────────────
   enemies: [],
@@ -106,14 +131,17 @@ export const useGameStore = create<GameStoreState>((set) => ({
       );
       const killed = updated.filter((e) => e.hp <= 0);
       const alive = updated.filter((e) => e.hp > 0);
-      const bonusPower = killed.length * 8;
+      const bonusPower = killed.length * 10;
       return {
         enemies: alive,
         brainPower: Math.min(100, state.brainPower + bonusPower),
       };
     }),
   removeEnemy: (id) =>
-    set((state) => ({ enemies: state.enemies.filter((e) => e.id !== id) })),
+    set((state) => ({
+      enemies: state.enemies.filter((e) => e.id !== id),
+      brainPower: Math.min(100, state.brainPower + 10),
+    })),
 
   // ── Posición del jugador ──────────────────────────────────────────────────
   playerPosition: [0, 0.5, 0],

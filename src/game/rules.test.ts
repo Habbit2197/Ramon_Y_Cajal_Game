@@ -160,3 +160,32 @@ test('All 3 levels include Santiago Ramon y Cajal educational completion dialogu
     assert.ok(lvl.cajalIntroQuote.length > 40);
   }
 });
+
+test('Agile Shooter: adding projectile, destroying enemy and increasing BrainPower', () => {
+  useGameStore.getState().resetPower();
+  useGameStore.getState().clearProjectiles();
+
+  // Test projectile creation
+  useGameStore.getState().addProjectile({
+    id: 'proj-test',
+    position: [0, 0.5, 0],
+    direction: [0, 0, -1],
+  });
+  assert.equal(useGameStore.getState().projectiles.length, 1);
+  assert.equal(useGameStore.getState().projectiles[0].id, 'proj-test');
+
+  // Test enemy spawn
+  useGameStore.getState().spawnEnemies([
+    { id: 'enemy-1', position: [0, 0.5, -5], type: 'smoke', hp: 1 },
+  ]);
+  assert.equal(useGameStore.getState().enemies.length, 1);
+
+  // Impact: destroy enemy, remove from store, increase BrainPower
+  const initialPower = useGameStore.getState().brainPower;
+  useGameStore.getState().removeEnemy('enemy-1');
+  useGameStore.getState().removeProjectile('proj-test');
+
+  assert.equal(useGameStore.getState().enemies.length, 0);
+  assert.equal(useGameStore.getState().projectiles.length, 0);
+  assert.equal(useGameStore.getState().brainPower, Math.min(100, initialPower + 10));
+});

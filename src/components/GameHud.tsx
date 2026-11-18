@@ -348,13 +348,14 @@ export const GameHud: React.FC<GameHudProps> = ({
 
           <button
             type="button"
-            aria-label="Impulso Sináptico"
+            aria-label="Disparo Sináptico"
             onClick={() => {
               virtualInputRef.current.dashPressed = true;
+              window.dispatchEvent(new CustomEvent('trigger-touch-shoot'));
             }}
             className="h-14 px-4 bg-[#d4a359] text-[#0d1117] font-bold rounded-xl shadow-lg active:scale-95 text-xs uppercase tracking-wider"
           >
-            Impulso
+            Disparo
           </button>
         </div>
 

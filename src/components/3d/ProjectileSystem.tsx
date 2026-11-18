@@ -1,28 +1,23 @@
 /**
- * ProjectileSystem.tsx
- * Sistema de proyectiles sinápticos.
+ * ProjectileSystem.tsx — Sistema de Disparo Ágil y Proyectiles Sinápticos
  *
- * - Lee projectiles[] del store Zustand
- * - Renderiza cada uno como RigidBody sensor (kinematic)
- * - En useFrame los mueve en su direction a PROJECTILE_SPEED m/s
- * - onIntersectionEnter → llama damageEnemy si el otro body es un enemy
- * - Elimina proyectiles fuera de bounds o que hayan colisionado
- *
- * Efecto visual: esfera pequeña con bloom emisivo amarillo-naranja +
- * una pointLight local para iluminar el entorno al pasar.
+ * - Sincronizado con Zustand (projectiles, addProjectile, removeProjectile, removeEnemy, increasePower).
+ * - Detecta pulsación de la barra espaciadora o botón táctil para añadir proyectiles al store global.
+ * - Renderiza los proyectiles como pequeñas esferas brillantes (emissive naranja/amarillo).
+ * - RigidBody type="kinematicPositionBased" sensor con onIntersectionEnter.
+ * - En useFrame, mueve cada proyectil hacia adelante en su dirección.
+ * - Al colisionar con un enemigo, lo destruye, lo elimina del store y suma BrainPower al jugador.
  */
 
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody, IntersectionEnterPayload } from '@react-three/rapier';
 import * as THREE from 'three';
 import { useGameStore, Projectile } from '../../store/useGameStore';
 
-const PROJECTILE_SPEED = 22.0;   // m/s
-const MAX_LIFETIME = 3.0;        // segundos antes de auto-eliminar
-const OUT_OF_BOUNDS = 20;        // distancia máxima del origen
-
-// ─── Un proyectil individual ──────────────────────────────────────────────────
+const PROJECTILE_SPEED = 24.0;
+const MAX_LIFETIME = 2.5;
+const OUT_OF_BOUNDS = 22;
 
 interface ProjectileProps {
   projectile: Projectile;
@@ -36,24 +31,30 @@ const ProjectileEntity: React.FC<ProjectileProps> = ({ projectile }) => {
   const hitRef = useRef(false);
 
   const removeProjectile = useGameStore((s) => s.removeProjectile);
-  const damageEnemy = useGameStore((s) => s.damageEnemy);
-  const incrementCombo = useGameStore((s) => s.incrementCombo);
+  const removeEnemy = useGameStore((s) => s.removeEnemy);
+  const increasePower = useGameStore((s) => s.increasePower);
   const addScore = useGameStore((s) => s.addScore);
+  const incrementCombo = useGameStore((s) => s.incrementCombo);
 
   const handleIntersect = useCallback(
     (payload: IntersectionEnterPayload) => {
       if (hitRef.current) return;
       const otherName = payload.other.rigidBodyObject?.name ?? '';
+
+      // Detección de impacto con toxina/enemigo
       if (otherName.startsWith('enemy-')) {
         const enemyId = otherName.replace('enemy-', '');
         hitRef.current = true;
-        damageEnemy(enemyId, 1);
-        incrementCombo();
+
+        // Destruir al enemigo, eliminarlo del store y sumar BrainPower al jugador
+        removeEnemy(enemyId);
+        increasePower(10);
         addScore(50);
+        incrementCombo();
         removeProjectile(projectile.id);
       }
     },
-    [damageEnemy, incrementCombo, addScore, removeProjectile, projectile.id]
+    [removeEnemy, increasePower, addScore, incrementCombo, removeProjectile, projectile.id]
   );
 
   useFrame((_state, delta) => {
@@ -63,7 +64,7 @@ const ProjectileEntity: React.FC<ProjectileProps> = ({ projectile }) => {
     const dt = Math.min(delta, 0.05);
     lifetimeRef.current += dt;
 
-    // Auto-destruir por lifetime o bounds
+    // Despawn por tiempo o límites del mapa
     if (
       lifetimeRef.current > MAX_LIFETIME ||
       Math.abs(posRef.current.x) > OUT_OF_BOUNDS ||
@@ -73,7 +74,7 @@ const ProjectileEntity: React.FC<ProjectileProps> = ({ projectile }) => {
       return;
     }
 
-    // Mover en la dirección del proyectil
+    // Mover hacia adelante en su dirección
     posRef.current.x += dirRef.current.x * PROJECTILE_SPEED * dt;
     posRef.current.z += dirRef.current.z * PROJECTILE_SPEED * dt;
 
@@ -87,46 +88,77 @@ const ProjectileEntity: React.FC<ProjectileProps> = ({ projectile }) => {
   return (
     <RigidBody
       ref={rbRef}
-      type="kinematicPosition"
+      type="kinematicPositionBased"
       sensor
       name={`projectile-${projectile.id}`}
       position={projectile.position}
       onIntersectionEnter={handleIntersect}
     >
-      {/* Colisionador pequeño */}
-      <group name="SynapticBolt">
-        {/* Núcleo del proyectil */}
-        <mesh>
-          <sphereGeometry args={[0.12, 8, 8]} />
-          <meshStandardMaterial
-            color="#ffaa00"
-            emissive="#ff6600"
-            emissiveIntensity={6}
-          />
-        </mesh>
-        {/* Halo externo */}
-        <mesh>
-          <sphereGeometry args={[0.22, 6, 6]} />
-          <meshStandardMaterial
-            color="#ffdd00"
-            emissive="#ffaa00"
-            emissiveIntensity={3}
-            wireframe
-            transparent
-            opacity={0.5}
-          />
-        </mesh>
-        {/* Luz puntual local */}
-        <pointLight color="#ff9900" intensity={5} distance={3} decay={2} />
-      </group>
+      {/* Pequeña esfera brillante (emissive naranja/amarillo) */}
+      <mesh name="SynapticBolt">
+        <sphereGeometry args={[0.15, 12, 12]} />
+        <meshStandardMaterial
+          color="#ffaa00"
+          emissive="#ff6600"
+          emissiveIntensity={4}
+          roughness={0.2}
+          metalness={0.1}
+        />
+      </mesh>
+      <pointLight color="#ff9900" intensity={4} distance={4} decay={2} />
     </RigidBody>
   );
 };
 
-// ─── Sistema completo ─────────────────────────────────────────────────────────
-
 export const ProjectileSystem: React.FC = () => {
   const projectiles = useGameStore((s) => s.projectiles);
+  const addProjectile = useGameStore((s) => s.addProjectile);
+
+  // Función para disparar sincronizada con el estado de Zustand
+  const shoot = useCallback(() => {
+    const state = useGameStore.getState();
+    const pos = state.playerPosition;
+    const jv = state.joystickVector;
+
+    let dx = jv.x;
+    let dz = jv.z;
+    if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
+      dz = -1; // Dirección frontal por defecto
+    } else {
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
+    }
+
+    const id = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    addProjectile({
+      id,
+      position: [pos[0], pos[1], pos[2]],
+      direction: [dx, 0, dz],
+    });
+  }, [addProjectile]);
+
+  // Sincronización con barra espaciadora y evento de botón táctil
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        shoot();
+      }
+    };
+
+    const onTouchShoot = () => {
+      shoot();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('trigger-touch-shoot', onTouchShoot);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('trigger-touch-shoot', onTouchShoot);
+    };
+  }, [shoot]);
 
   return (
     <>

@@ -89,7 +89,7 @@ export const Scene: React.FC = () => {
       <Environment preset="night" background={false} />
 
       {/* Motor de físicas sin gravedad (top-down shooter) */}
-      <Physics gravity={[0, 0, 0]} debug={false}>
+      <Physics gravity={[0, 0, 0]}>
         <Player position={[0, 0.5, 0]} />
         <ProjectileSystem />
         <EnemySystem />
