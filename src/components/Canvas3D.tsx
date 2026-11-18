@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-// R3F Agile Shooter architecture: See src/components/3d/Scene.tsx
+// R3F Agile Shooter architecture: See src/legacy/Scene.tsx
 // which encapsulates interactive player, projectiles and enemies inside <Physics gravity={[0, 0, 0]}>
-export { Scene } from './3d/Scene';
+export { Scene } from '../legacy/Scene';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';

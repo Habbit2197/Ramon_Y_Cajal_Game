@@ -14,11 +14,11 @@ import { STEP } from '../../engine/clock';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
-const _s = new THREE.Vector3();
+const _s = new THREE.Vector3(0.14, 0.14, 0.55);
 const _v = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
-const CAPSULE_GEO = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6);
+const CAPSULE_GEO = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
 CAPSULE_GEO.rotateX(Math.PI / 2);
 
 export function ProjectileRenderer() {
@@ -32,7 +32,6 @@ export function ProjectileRenderer() {
     for (let i = 0; i < p.count; i++) {
       _v.set(p.x[i] + p.vx[i] * STEP * a, 0.5, p.z[i] + p.vz[i] * STEP * a);
       _q.setFromAxisAngle(UP, Math.atan2(p.vx[i], p.vz[i]));
-      _s.set(0.14, 0.14, 0.55);
       mesh.current.setMatrixAt(i, _m.compose(_v, _q, _s));
     }
 

@@ -24,6 +24,14 @@ export const G = {
   SWARM: 3,
 } as const;
 
+const KIND_OFFSET: Record<string, number> = {
+  swarmer: -200,
+  tank0: -120,
+  tank1: -80,
+  tank2: -40,
+  homing: 0,
+};
+
 export interface EnemyPoolProps {
   kind: EnemyKind;
   size: number;
@@ -38,7 +46,11 @@ export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
     () =>
       Array.from({ length: size }, (_, i) => ({
         key: `${kind}-${i}`,
-        position: [PARK.x, PARK.y, PARK.z],
+        position: [
+          KIND_OFFSET[kind] + (i % 16) * 2.5,
+          PARK.y,
+          Math.floor(i / 16) * 2.5,
+        ],
       })),
     [kind, size]
   );
@@ -48,7 +60,6 @@ export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
     world.pools[kind].attach(bodies.current);
     bodies.current.forEach((b) => {
       b.setEnabled(false);
-      b.setTranslation(PARK, false);
       b.setLinvel({ x: 0, y: 0, z: 0 }, false);
     });
   }, [kind]);

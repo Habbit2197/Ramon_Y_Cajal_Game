@@ -11,7 +11,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody, IntersectionEnterPayload } from '@react-three/rapier';
 import * as THREE from 'three';
-import { useGameStore, Enemy } from '../../store/useGameStore';
+import { useLegacyGameStore as useGameStore, type Enemy } from './legacyGameStore';
 
 const ENEMY_COLORS: Record<Enemy['type'], string> = {
   smoke:   '#6b7280',

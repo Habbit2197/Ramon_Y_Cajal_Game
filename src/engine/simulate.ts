@@ -20,6 +20,7 @@ import { steer, swarmerDesired, homingDesired, type Vec2 } from '../game/enemies
 import { flushSplits } from '../game/enemies/tank';
 import { feel } from './feel';
 import { useRunStore } from '../store/useRunStore';
+import { pickAimTarget, AIM_MOBILE } from '../game/aim';
 
 const _steerOut: Vec2 = { x: 0, z: 0 };
 
@@ -62,6 +63,41 @@ export function simulate(w: World, dt: number) {
     } else if (kind === 'homing') {
       homingDesired(poolIdx, pool, p.x, p.z, dt, _steerOut);
       steer(body, _steerOut.x, _steerOut.z, 28, dt);
+    }
+  }
+
+  // ── Asistencia de apuntado / Auto-aim (móvil o sin ratón) ─────────
+  const isTouch =
+    typeof window !== 'undefined' &&
+    ('ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+  const noMouse = !p.hasMouse;
+
+  if (isTouch || noMouse) {
+    const lookDirX = p.dirX !== 0 || p.dirZ !== 0 ? p.dirX : (p.aimX || 0);
+    const lookDirZ = p.dirX !== 0 || p.dirZ !== 0 ? p.dirZ : (p.aimZ || -1);
+    const targetIdx = pickAimTarget(
+      p.x,
+      p.z,
+      lookDirX,
+      lookDirZ,
+      m,
+      p.prevTargetId ?? -1,
+      AIM_MOBILE
+    );
+    if (targetIdx >= 0) {
+      p.prevTargetId = m.id[targetIdx];
+      const dx = m.x[targetIdx] - p.x;
+      const dz = m.z[targetIdx] - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 1e-4) {
+        p.aimX = dx / d;
+        p.aimZ = dz / d;
+      }
+    } else if (p.dirX !== 0 || p.dirZ !== 0) {
+      p.aimX = p.dirX;
+      p.aimZ = p.dirZ;
     }
   }
 

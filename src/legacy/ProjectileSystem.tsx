@@ -13,7 +13,7 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody, IntersectionEnterPayload } from '@react-three/rapier';
 import * as THREE from 'three';
-import { useGameStore, Projectile } from '../../store/useGameStore';
+import { useLegacyGameStore as useGameStore, type Projectile } from './legacyGameStore';
 
 const PROJECTILE_SPEED = 24.0;
 const MAX_LIFETIME = 2.5;
@@ -88,7 +88,7 @@ const ProjectileEntity: React.FC<ProjectileProps> = ({ projectile }) => {
   return (
     <RigidBody
       ref={rbRef}
-      type="kinematicPositionBased"
+      type="kinematicPosition"
       sensor
       name={`projectile-${projectile.id}`}
       position={projectile.position}

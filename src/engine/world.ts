@@ -24,6 +24,8 @@ export interface PlayerState {
   vz: number;
   aimX: number;
   aimZ: number;
+  hasMouse?: boolean;
+  prevTargetId?: number;
   dirX: number;
   dirZ: number;
   baseSpeed: number;
@@ -557,6 +559,10 @@ export class World {
     this.player.z = 0;
     this.player.vx = 0;
     this.player.vz = 0;
+    this.player.aimX = 0;
+    this.player.aimZ = -1;
+    this.player.hasMouse = false;
+    this.player.prevTargetId = -1;
     this.player.brainPower = 100;
     this.player.vitality = 3;
     this.player.maxVitality = 3;

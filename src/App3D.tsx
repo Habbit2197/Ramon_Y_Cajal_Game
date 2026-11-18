@@ -54,6 +54,7 @@ function lowerTier(current: Tier): Tier {
 
 export function App3D() {
   const [tier, setTier] = useState<Tier>(detectInitialTier);
+  const [poolTier] = useState<Tier>(() => tier);
 
   useEffect(() => {
     world.tier = tier;
@@ -124,7 +125,7 @@ export function App3D() {
             kind={p.kind}
             geometry={p.geometry}
             material={p.material}
-            size={p.size[tier]}
+            size={p.size[poolTier]}
           />
         ))}
       </Physics>

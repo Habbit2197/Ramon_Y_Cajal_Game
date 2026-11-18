@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import { useGameStore } from '../../store/useGameStore';
+import { useLegacyGameStore as useGameStore } from './legacyGameStore';
 import { Sparkles, Brain, Zap, Shield, Play } from 'lucide-react';
 
 export const GameMenu: React.FC = () => {

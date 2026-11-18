@@ -11,6 +11,7 @@ import {
   computeAnimationBlendWeights,
 } from './rules';
 import { useGameStore } from '../store/useGameStore';
+import { useLegacyGameStore } from '../legacy/legacyGameStore';
 import { FATIGUE_FRAGMENT_SHADER } from '../shaders/FatigueShader';
 
 test('useGameStore initializes brainPower at 50 and clamps increasePower / decreasePower between 0 and 100', () => {
@@ -161,36 +162,36 @@ test('All 3 levels include Santiago Ramon y Cajal educational completion dialogu
 });
 
 test('Agile Shooter: adding projectile, destroying enemy and increasing BrainPower', () => {
-  useGameStore.getState().resetPower();
-  useGameStore.getState().clearProjectiles();
+  useLegacyGameStore.getState().resetPower();
+  useLegacyGameStore.getState().clearProjectiles();
 
   // Test projectile creation
-  useGameStore.getState().addProjectile({
+  useLegacyGameStore.getState().addProjectile({
     id: 'proj-test',
     position: [0, 0.5, 0],
     direction: [0, 0, -1],
   });
-  assert.equal(useGameStore.getState().projectiles.length, 1);
-  assert.equal(useGameStore.getState().projectiles[0].id, 'proj-test');
+  assert.equal(useLegacyGameStore.getState().projectiles.length, 1);
+  assert.equal(useLegacyGameStore.getState().projectiles[0].id, 'proj-test');
 
   // Test enemy spawn
-  useGameStore.getState().spawnEnemies([
+  useLegacyGameStore.getState().spawnEnemies([
     { id: 'enemy-1', position: [0, 0.5, -5], type: 'smoke', hp: 1 },
   ]);
-  assert.equal(useGameStore.getState().enemies.length, 1);
+  assert.equal(useLegacyGameStore.getState().enemies.length, 1);
 
   // Impact: destroy enemy, remove from store, increase BrainPower
-  const initialPower = useGameStore.getState().brainPower;
-  useGameStore.getState().removeEnemy('enemy-1');
-  useGameStore.getState().removeProjectile('proj-test');
+  const initialPower = useLegacyGameStore.getState().brainPower;
+  useLegacyGameStore.getState().removeEnemy('enemy-1');
+  useLegacyGameStore.getState().removeProjectile('proj-test');
 
-  assert.equal(useGameStore.getState().enemies.length, 0);
-  assert.equal(useGameStore.getState().projectiles.length, 0);
-  assert.equal(useGameStore.getState().brainPower, Math.min(100, initialPower + 10));
+  assert.equal(useLegacyGameStore.getState().enemies.length, 0);
+  assert.equal(useLegacyGameStore.getState().projectiles.length, 0);
+  assert.equal(useLegacyGameStore.getState().brainPower, Math.min(100, initialPower + 10));
 });
 
-test('useGameStore: Game Flow (playerName, currentLevel, gameState and actions)', () => {
-  const store = useGameStore.getState();
+test('useLegacyGameStore: Game Flow (playerName, currentLevel, gameState and actions)', () => {
+  const store = useLegacyGameStore.getState();
 
   // Initial state check
   assert.equal(store.playerName, '');
@@ -198,19 +199,19 @@ test('useGameStore: Game Flow (playerName, currentLevel, gameState and actions)'
   assert.equal(store.gameState, 'menu');
 
   // Set player name
-  useGameStore.getState().setPlayerName('Santiago');
-  assert.equal(useGameStore.getState().playerName, 'Santiago');
+  useLegacyGameStore.getState().setPlayerName('Santiago');
+  assert.equal(useLegacyGameStore.getState().playerName, 'Santiago');
 
   // Start game
-  useGameStore.getState().startGame();
-  assert.equal(useGameStore.getState().gameState, 'playing');
-  assert.equal(useGameStore.getState().brainPower, 100);
+  useLegacyGameStore.getState().startGame();
+  assert.equal(useLegacyGameStore.getState().gameState, 'playing');
+  assert.equal(useLegacyGameStore.getState().brainPower, 100);
 
   // Next level
-  useGameStore.getState().nextLevel();
-  assert.equal(useGameStore.getState().currentLevel, 2);
+  useLegacyGameStore.getState().nextLevel();
+  assert.equal(useLegacyGameStore.getState().currentLevel, 2);
 
   // Game over
-  useGameStore.getState().gameOver();
-  assert.equal(useGameStore.getState().gameState, 'gameover');
+  useLegacyGameStore.getState().gameOver();
+  assert.equal(useLegacyGameStore.getState().gameState, 'gameover');
 });

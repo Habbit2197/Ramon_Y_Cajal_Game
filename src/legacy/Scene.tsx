@@ -10,11 +10,11 @@
 import React from 'react';
 import { Physics } from '@react-three/rapier';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
-import { Player } from './Player';
+import { Player } from '../components/3d/Player';
 import { ProjectileSystem } from './ProjectileSystem';
 import { EnemySystem } from './EnemySystem';
-import { useGameStore } from '../../store/useGameStore';
-import { FATIGUE_FRAGMENT_SHADER } from '../../shaders/FatigueShader';
+import { useLegacyGameStore as useGameStore } from './legacyGameStore';
+import { FATIGUE_FRAGMENT_SHADER } from '../shaders/FatigueShader';
 
 export const R3F_SCENE_SOURCE = 'Agile Shooter: Physics<Player+Projectiles+Enemies> / no gravity';
 

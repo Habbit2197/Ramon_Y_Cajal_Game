@@ -65,6 +65,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
+      world.player.hasMouse = true;
       _mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       _mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       _raycaster.setFromCamera(_mouse, camera);
@@ -161,7 +162,6 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     p.z = THREE.MathUtils.clamp(p.z + p.vz * dt, -BOUNDS.z, BOUNDS.z);
 
     ref.current.setNextKinematicTranslation({ x: p.x, y: 0.5, z: p.z });
-    useGameStore.getState().setPlayerPosition([p.x, 0.5, p.z]);
 
     // 4. Timers de dash, invulnerabilidad e inercia
     if (p.dashActiveTimer > 0) p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);
