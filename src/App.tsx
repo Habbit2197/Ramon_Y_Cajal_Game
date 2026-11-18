@@ -1,115 +1,263 @@
 /**
- * @license
- * SPDX-License-Identifier: Apache-2.0
+ * App.tsx — Cajal: Sinapsis 3D
  *
- * App.tsx — Punto de entrada del Roguelite Twin-Stick Cajal: Sinapsis 3D
+ * Tres pantallas:
+ * - menu:   menú principal (alias, modo, clasificación) sobre el recorrido 3D del parque.
+ * - story:  Modo Historia, el juego original del parque (Canvas3D + GameHud).
+ * - arcade: Modo Arcade, el shooter roguelite dentro del cerebro (App3D).
  *
- * Conecta el pipeline 3D en React Three Fiber (App3D) con la interfaz
- * reactiva a 10 Hz (RogueliteHUD), pantalla de inicio, draft y fin de partida.
+ * Canvas3D se mantiene montado entre menú e historia (el menú usa su modo 'title'),
+ * y se desmonta al entrar en arcade para que nunca haya dos contextos WebGL a la vez.
  */
-
-import React, { Suspense, useState, useEffect, useCallback } from 'react';
-import { App3D } from './App3D';
-import { RogueliteHUD } from './components/ui/RogueliteHUD';
-import { TitleScreen } from './components/ui/TitleScreen';
-import { DraftModal } from './components/ui/DraftModal';
-import { GameOverModal } from './components/ui/GameOverModal';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Canvas3D, type GameAppState, type HudSnapshot } from './components/Canvas3D';
+import { GameHud } from './components/GameHud';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { useRunStore } from './store/useRunStore';
+import { MainMenu } from './components/menu/MainMenu';
+import { StoryPauseModal, StoryOutcomeModal, timeBonus } from './modes/StoryModals';
+import { ArcadeMode } from './modes/ArcadeMode';
+import { LEVELS } from './game/rules';
 import { soundEngine } from './game/sound';
+import { useGameStore } from './store/useGameStore';
+import { useProfileStore, aliasKey, type GameMode } from './store/useProfileStore';
+import { useRunStore } from './store/useRunStore';
+import { feelSettings } from './engine/feel';
+import { OnboardingModal } from './components/onboarding/OnboardingModal';
+import { StoryCoach } from './components/onboarding/Coach';
+import { TrophyBook } from './components/menu/TrophyBook';
+import { TrophyToasts } from './components/menu/TrophyToasts';
+import { SettingsPanel } from './components/menu/SettingsPanel';
 
-const GddModalLazy = React.lazy(() =>
-  import('./components/GddModal').then((m) => ({ default: m.GddModal }))
-);
+const GddModal = lazy(() => import('./components/GddModal').then((m) => ({ default: m.GddModal })));
+
+type Screen = 'menu' | 'story' | 'arcade';
+
+const INITIAL_HUD: HudSnapshot = {
+  brainPower: 20,
+  cognitiveFatiguePct: 80,
+  vitality: 3,
+  maxVitality: 3,
+  speedModifier: 1.0,
+  activeEffectName: null,
+  effectTimer: 0,
+  synapsesCollected: 0,
+  hazardsHit: 0,
+  score: 0,
+  portalUnlocked: false,
+  cajalBannerText: LEVELS[0].cajalIntroQuote,
+  cajalBannerType: 'intro',
+  elapsedTime: 0,
+  dashReady: true,
+  animState: 'Idle',
+};
+
+const shortName = (n: string) => n.replace(/^Nivel \d+:\s*/, '');
 
 export default function App() {
-  const phase = useRunStore((s) => s.phase);
-  const setPhase = useRunStore((s) => s.setPhase);
-
+  const [screen, setScreen] = useState<Screen>('menu');
+  const [mode, setMode] = useState<GameMode>('story');
+  const [levelIndex, setLevelIndex] = useState(0);
+  const [storyState, setStoryState] = useState<GameAppState>('title');
+  const [resetSignal, setResetSignal] = useState(0);
+  const [hud, setHud] = useState<HudSnapshot>(INITIAL_HUD);
+  const [outcome, setOutcome] = useState<{ kind: 'victory' | 'defeat'; stats: HudSnapshot; score: number; rank: number | null; stars: number } | null>(null);
+  /** Onboarding abierto: para qué modo y si al terminar empieza la partida */
+  const [onboarding, setOnboarding] = useState<{ mode: GameMode; thenStart: boolean } | null>(null);
+  /** Guía interactiva activa en la partida actual */
+  const [coach, setCoach] = useState<GameMode | null>(null);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [gddOpen, setGddOpen] = useState(false);
+  const virtualInputRef = useRef({ moveX: 0, moveZ: 0, dashPressed: false });
 
-  // Sincronizar dataset.state en document.body para styling global / shaders
+  const level = LEVELS[levelIndex] ?? LEVELS[0];
+  const canvasState: GameAppState = screen === 'menu' ? 'title' : storyState;
+
+  // Contrato del Game Shell: el estado visible en <body data-state>
   useEffect(() => {
-    document.body.dataset.state = phase;
-  }, [phase]);
+    document.body.dataset.state = screen === 'arcade' ? 'arcade' : canvasState;
+  }, [screen, canvasState]);
 
-  const handleToggleMute = useCallback(() => {
-    const next = soundEngine.toggleMute();
-    setMuted(next);
+  const toggleMute = useCallback(() => setMuted(soundEngine.toggleMute()), []);
+
+  useEffect(() => {
+    const apply = (s: ReturnType<typeof useRunStore.getState>['settings']) => Object.assign(feelSettings, s);
+    apply(useRunStore.getState().settings);
+    return useRunStore.subscribe((st, prev) => { if (st.settings !== prev.settings) apply(st.settings); });
   }, []);
 
-  const handlePause = useCallback(() => {
-    if (phase === 'playing') {
-      setPhase('paused');
-    } else if (phase === 'paused') {
-      setPhase('playing');
-    }
-  }, [phase, setPhase]);
+  const startStory = useCallback((idx: number) => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    virtualInputRef.current = { moveX: 0, moveZ: 0, dashPressed: false };
+    setLevelIndex(idx);
+    setOutcome(null);
+    setResetSignal((s) => s + 1);
+    setStoryState('playing');
+    setScreen('story');
+  }, []);
 
-  // Atajos de teclado globales (Mute [M], GDD [G], Pausa [P / Escape])
+  const backToMenu = useCallback(() => {
+    setOutcome(null);
+    setStoryState('title');
+    setScreen('menu');
+  }, []);
+
+  const startMode = useCallback(
+    (m: GameMode, withCoach: boolean) => {
+      setCoach(withCoach ? m : null);
+      if (m === 'story') startStory(levelIndex);
+      else setScreen('arcade');
+    },
+    [levelIndex, startStory],
+  );
+
+  /** La primera vez que un alias juega un modo, ve antes el onboarding y luego la guía en partida. */
+  const play = useCallback(() => {
+    const p = useProfileStore.getState();
+    const seen = p.progress[aliasKey(p.playerName)]?.onboarding[mode];
+    if (!seen) setOnboarding({ mode, thenStart: true });
+    else startMode(mode, false);
+  }, [mode, startMode]);
+
+  const finishOnboarding = useCallback(() => {
+    if (!onboarding) return;
+    useProfileStore.getState().setOnboardingSeen(onboarding.mode, true);
+    setOnboarding(null);
+    if (onboarding.thenStart) startMode(onboarding.mode, true);
+  }, [onboarding, startMode]);
+
+  const handleHudUpdate = useCallback((snapshot: HudSnapshot) => {
+    setHud(snapshot);
+    useGameStore.getState().setBrainPower(snapshot.brainPower);
+  }, []);
+
+  const handleStageEnd = useCallback(
+    (kind: 'victory' | 'defeat', stats: HudSnapshot) => {
+      const score = stats.score + (kind === 'victory' ? timeBonus(stats.elapsedTime) : 0);
+      const detail = `${shortName(LEVELS[levelIndex].name)}, ${kind === 'victory' ? 'completado' : 'sin terminar'}`;
+      const profile = useProfileStore.getState();
+      const rank = profile.submitScore('story', score, detail);
+      const { stars } = profile.recordStory({
+        won: kind === 'victory',
+        levelIndex,
+        seconds: stats.elapsedTime,
+        vitality: stats.vitality,
+        maxVitality: stats.maxVitality,
+        hazardsHit: stats.hazardsHit,
+        habits: stats.synapsesCollected,
+      });
+      setOutcome({ kind, stats, score, rank, stars });
+      setCoach(null);
+      setStoryState('gameover');
+    },
+    [levelIndex],
+  );
+
+  // Atajos del Modo Historia
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (gddOpen) {
-        if (e.code === 'Escape' || e.code === 'KeyG') {
-          e.preventDefault();
-          setGddOpen(false);
-        }
-        return;
-      }
-
-      if (e.code === 'KeyM') {
+    if (screen !== 'story') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (gddOpen || onboarding) return;
+      if (storyState === 'playing') {
+        if (e.code === 'Escape' || e.code === 'KeyP') { e.preventDefault(); setStoryState('paused'); }
+        else if (e.code === 'KeyM') { e.preventDefault(); toggleMute(); }
+        else if (e.code === 'KeyR') { e.preventDefault(); startStory(levelIndex); }
+      } else if (storyState === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) {
         e.preventDefault();
-        handleToggleMute();
-      } else if (e.code === 'KeyG') {
-        e.preventDefault();
-        setGddOpen(true);
-      } else if (e.code === 'KeyP' || e.code === 'Escape') {
-        if (phase === 'playing' || phase === 'paused') {
-          e.preventDefault();
-          handlePause();
-        }
+        setStoryState('playing');
       }
     };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [gddOpen, phase, handleToggleMute, handlePause]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [screen, storyState, gddOpen, onboarding, levelIndex, startStory, toggleMute]);
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden select-none bg-[#03050c]">
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <App3D />
-        </Suspense>
-      </ErrorBoundary>
+    <main className="relative w-screen h-screen overflow-hidden select-none bg-[#0b1220]">
+      {screen !== 'arcade' && (
+        <ErrorBoundary>
+          <Canvas3D
+            appState={canvasState}
+            levelIndex={levelIndex}
+            resetSignal={resetSignal}
+            virtualInputRef={virtualInputRef}
+            onHudUpdate={handleHudUpdate}
+            onStageEnd={handleStageEnd}
+          />
+        </ErrorBoundary>
+      )}
 
-      {/* HUD activo durante juego y pausa */}
-      {phase !== 'title' && (
-        <RogueliteHUD
-          onPause={handlePause}
+      {screen === 'menu' && (
+        <MainMenu
+          mode={mode}
+          onModeChange={setMode}
+          levelIndex={levelIndex}
+          onLevelChange={setLevelIndex}
+          onPlay={play}
           muted={muted}
-          onToggleMute={handleToggleMute}
+          onToggleMute={toggleMute}
+          onOpenGdd={() => setGddOpen(true)}
+          onHowToPlay={() => setOnboarding({ mode, thenStart: true })}
+          onOpenBook={() => setBookOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          keyboardEnabled={!onboarding && !bookOpen && !settingsOpen && !gddOpen}
         />
       )}
 
-      {/* Pantalla de inicio de tinción de Golgi */}
-      <TitleScreen
-        onOpenGdd={() => setGddOpen(true)}
-        muted={muted}
-        onToggleMute={handleToggleMute}
-      />
+      {screen === 'story' && storyState === 'playing' && (
+        <GameHud
+          hud={hud}
+          level={level}
+          muted={muted}
+          onToggleMute={toggleMute}
+          onPause={() => setStoryState('paused')}
+          onRestart={() => startStory(levelIndex)}
+          onOpenGdd={() => {
+            setStoryState('paused');
+            setGddOpen(true);
+          }}
+          virtualInputRef={virtualInputRef}
+        />
+      )}
 
-      {/* Draft de Neuroplasticidad entre oleadas */}
-      <DraftModal />
+      {screen === 'story' && storyState === 'paused' && !gddOpen && !onboarding && (
+        <StoryPauseModal level={level} hud={hud} onResume={() => setStoryState('playing')} onRestart={() => startStory(levelIndex)} onExit={backToMenu} onHelp={() => setOnboarding({ mode: 'story', thenStart: false })} />
+      )}
 
-      {/* Modal de Fin de Partida */}
-      <GameOverModal />
+      {screen === 'story' && storyState === 'gameover' && outcome && !gddOpen && (
+        <StoryOutcomeModal
+          outcome={outcome.kind}
+          levelIndex={levelIndex}
+          stats={outcome.stats}
+          finalScore={outcome.score}
+          rank={outcome.rank}
+          stars={outcome.stars}
+          onNext={() => startStory(levelIndex + 1)}
+          onRetry={() => startStory(levelIndex)}
+          onExit={backToMenu}
+        />
+      )}
 
-      {/* Modal GDD */}
-      <Suspense fallback={null}>
-        <GddModalLazy isOpen={gddOpen} onClose={() => setGddOpen(false)} />
-      </Suspense>
+      {screen === 'story' && storyState === 'playing' && <StoryCoach hud={hud} active={coach === 'story'} onFinish={() => setCoach(null)} />}
+
+      {screen === 'arcade' && (
+        <ArcadeMode
+          onExit={backToMenu}
+          muted={muted}
+          onToggleMute={toggleMute}
+          coach={coach === 'arcade'}
+          onCoachDone={() => setCoach(null)}
+          onHelp={() => setOnboarding({ mode: 'arcade', thenStart: false })}
+          helpOpen={!!onboarding}
+        />
+      )}
+
+      {onboarding && <OnboardingModal mode={onboarding.mode} onDone={finishOnboarding} />}
+      {bookOpen && <TrophyBook onClose={() => setBookOpen(false)} />}
+      {settingsOpen && <SettingsPanel muted={muted} onToggleMute={toggleMute} onClose={() => setSettingsOpen(false)} />}
+      <TrophyToasts />
+
+      <Suspense fallback={null}>{gddOpen && <GddModal isOpen={gddOpen} onClose={() => setGddOpen(false)} />}</Suspense>
     </main>
   );
 }

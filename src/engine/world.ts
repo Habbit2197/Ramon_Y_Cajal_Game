@@ -17,6 +17,10 @@ import { mulberry32 } from './rng';
 import { feel } from './feel';
 import { onTankKilled } from '../game/enemies/tank';
 
+
+/** Puntos por toxina eliminada (se multiplican por región) */
+const KILL_POINTS: Record<EnemyKind, number> = { swarmer: 10, tank0: 60, tank1: 30, tank2: 15, homing: 25 };
+
 export interface PlayerState {
   x: number;
   z: number;
@@ -24,8 +28,11 @@ export interface PlayerState {
   vz: number;
   aimX: number;
   aimZ: number;
-  hasMouse?: boolean;
-  prevTargetId?: number;
+  /** Punto del suelo bajo el ratón y segundos desde su último movimiento */
+  mouseWX: number;
+  mouseWZ: number;
+  mouseIdle: number;
+  aimTargetId: number;
   dirX: number;
   dirZ: number;
   baseSpeed: number;
@@ -139,6 +146,10 @@ export class World {
     vz: 0,
     aimX: 0,
     aimZ: -1,
+    mouseWX: 0,
+    mouseWZ: 0,
+    mouseIdle: 999,
+    aimTargetId: -1,
     dirX: 0,
     dirZ: 0,
     baseSpeed: 6.8,
@@ -524,6 +535,8 @@ export class World {
 
     if (pool.hp[poolIdx] <= 0) {
       feel.emit('kill');
+      this.kills++;
+      this.score += Math.round(KILL_POINTS[kind] * (1 + this.region * 0.5));
       this.addRipple(x, z, 0.8);
 
       // Partículas y color temático por tipo de toxina
@@ -553,16 +566,27 @@ export class World {
     }
   }
 
+  /** Petición de Ola de Potenciación pendiente (la atiende simulate) */
+  ultRequest = false;
+  /** Impulsos realizados en la partida (para la guía y estadísticas) */
+  dashes = 0;
+
+  /** Puntuación de la partida arcade (para la clasificación) */
+  score = 0;
+  kills = 0;
+  elapsed = 0;
+
   reset(seed = 12345) {
     this.rng = mulberry32(seed);
+    this.score = 0;
+    this.ultRequest = false;
+    this.dashes = 0;
+    this.kills = 0;
+    this.elapsed = 0;
     this.player.x = 0;
     this.player.z = 0;
     this.player.vx = 0;
     this.player.vz = 0;
-    this.player.aimX = 0;
-    this.player.aimZ = -1;
-    this.player.hasMouse = false;
-    this.player.prevTargetId = -1;
     this.player.brainPower = 100;
     this.player.vitality = 3;
     this.player.maxVitality = 3;

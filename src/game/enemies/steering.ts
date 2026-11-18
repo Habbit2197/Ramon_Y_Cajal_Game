@@ -5,6 +5,8 @@
 import type { RapierRigidBody } from '@react-three/rapier';
 import { EnemyPoolSim } from './pool';
 
+export const SWARMER_SPEED = 5.4;
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -77,8 +79,9 @@ export function swarmerDesired(
   }
 
   const l = Math.hypot(dx, dz) || 1;
-  out.x = (dx / l) * 7.5;
-  out.z = (dz / l) * 7.5;
+  // Más lentos que el jugador (6,8 u/s): se les puede esquivar moviéndose
+  out.x = (dx / l) * SWARMER_SPEED;
+  out.z = (dz / l) * SWARMER_SPEED;
 }
 
 /**

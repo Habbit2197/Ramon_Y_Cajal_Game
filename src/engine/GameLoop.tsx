@@ -12,6 +12,7 @@ import { STEP, clock } from './clock';
 import { feel } from './feel';
 import { world } from './world';
 import { simulate } from './simulate';
+import { useRunStore } from '../store/useRunStore';
 
 export function GameLoop() {
   const { step } = useRapier(); // Rapier en modo pausado para avance manual estricto
@@ -21,6 +22,8 @@ export function GameLoop() {
     feel.update(dt); // Cámara, flashes y VFX siempre se actualizan en tiempo real
 
     // Hit-stop congela la simulación para otorgar peso visceral al impacto
+    if (useRunStore.getState().phase !== 'playing') return; // pausa, draft o fin: mundo congelado
+
     if (clock.hitstop > 0) {
       clock.hitstop -= dt;
       return;

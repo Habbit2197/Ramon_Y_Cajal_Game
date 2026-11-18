@@ -37,6 +37,8 @@ export const REGIONS = ['corteza', 'hipocampo', 'cerebelo'] as const;
 
 export interface RunSlice {
   phase: Phase;
+  /** true si se superaron las tres regiones */
+  runWon: boolean;
   region: number;
   wave: number;
   level: number;
@@ -73,6 +75,7 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
       (set, get) => ({
         // ── Slice de Partida Actual ──
         phase: 'title',
+        runWon: false,
         region: 0,
         wave: 0,
         level: 1,
@@ -143,11 +146,18 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
             if (s.wave < 5) {
               const nextW = s.wave + 1;
               world.wave = nextW;
+              world.score += 150 * nextW;
               world.director.startWave(nextW, s.region, world);
               return { wave: nextW, phase: 'playing' };
             } else {
               // Fin de la región
               const nextR = s.region + 1;
+              if (nextR >= REGIONS.length) {
+                // Las tres regiones superadas: victoria de la partida
+                world.score += 3000;
+                return { runWon: true, phase: 'gameover', bestRegion: REGIONS.length, fichas: s.fichas + 5 };
+              }
+              world.score += 1000;
               world.region = nextR;
               world.wave = 0;
               world.director.startWave(0, nextR, world);
@@ -168,6 +178,7 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
           world.player.mods = baseMods;
           set({
             phase: 'playing',
+            runWon: false,
             region: 0,
             wave: 0,
             level: 1,

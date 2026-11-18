@@ -1,8 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-// R3F Agile Shooter architecture: See src/legacy/Scene.tsx
-// which encapsulates interactive player, projectiles and enemies inside <Physics gravity={[0, 0, 0]}>
-export { Scene } from '../legacy/Scene';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -25,6 +22,7 @@ import {
 } from '../game/rules';
 import { CognitiveFatigueShader } from '../game/shaders/cognitiveFatigueShader';
 import { soundEngine } from '../game/sound';
+import { feelSettings } from '../engine/feel';
 
 export type GameAppState = 'title' | 'playing' | 'paused' | 'gameover';
 
@@ -1756,7 +1754,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
         // Exponentially damped follow camera with decaying trauma shake
         cameraTrauma = Math.max(0, cameraTrauma - dt * 1.8);
-        const shakeOffset = cameraTrauma * cameraTrauma * 0.48;
+        const shakeOffset = cameraTrauma * cameraTrauma * 0.48 * feelSettings.shakeScale; // ajuste de accesibilidad
         const shakeX = Math.sin(elapsed * 48) * shakeOffset;
         const shakeY = Math.cos(elapsed * 54) * shakeOffset;
 

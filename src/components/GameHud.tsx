@@ -42,7 +42,7 @@ export const GameHud: React.FC<GameHudProps> = ({
   return (
     <div className="fixed inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
       {/* TOP PERIMETER ROW: Top-Left Neural Cluster & Top-Right Utility Controls */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         {/* Top-Left Cluster: BrainPower (Red Neuronal), Vitality Pips & Speed Physics */}
         <div
           className="pointer-events-auto bg-[#111621]/95 border border-[#d4a359]/45 rounded-xl p-3.5 shadow-2xl max-w-sm w-full"
@@ -348,14 +348,13 @@ export const GameHud: React.FC<GameHudProps> = ({
 
           <button
             type="button"
-            aria-label="Disparo Sináptico"
+            aria-label="Impulso sináptico (esquivar)"
             onClick={() => {
               virtualInputRef.current.dashPressed = true;
-              window.dispatchEvent(new CustomEvent('trigger-touch-shoot'));
             }}
             className="h-14 px-4 bg-[#d4a359] text-[#0d1117] font-bold rounded-xl shadow-lg active:scale-95 text-xs uppercase tracking-wider"
           >
-            Disparo
+            Impulso
           </button>
         </div>
 

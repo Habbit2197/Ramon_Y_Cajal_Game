@@ -13,6 +13,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { world } from '../../engine/world';
+import { soundEngine } from '../../game/sound';
+import { useRunStore } from '../../store/useRunStore';
 import { tryDash } from '../../game/dash';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -21,6 +23,7 @@ const _raycaster = new THREE.Raycaster();
 const _plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const _intersect = new THREE.Vector3();
 const _mouse = new THREE.Vector2();
+const PERFECT_DASH_RADIUS = 1.3;
 
 export interface PlayerProps {
   position?: [number, number, number];
@@ -36,26 +39,24 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
   const keys = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
+    /** Impulso sobre el jugador REAL (antes se pasaba una copia y no tenía efecto).
+     *  «Perfecto» solo si una toxina está a punto de tocarte (radio de contacto + margen). */
+    const doDash = () => {
+      if (useRunStore.getState().phase !== 'playing') return;
+      const before = world.player.dashCooldown;
+      const threat = world.grid.anyThreatWithin(world.player.x, world.player.z, PERFECT_DASH_RADIUS, () => true);
+      if (tryDash(world.player, threat, world.ranvierNodes) && before <= 0) {
+        world.dashes++;
+        soundEngine.playDash();
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
       keys.current[e.key.toLowerCase()] = true;
+      if (e.code === 'KeyE') world.ultRequest = true;
       if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === ' ') {
-        const threat = world.grid.anyThreatWithin(world.player.x, world.player.z, 3.5, () => true);
-        tryDash(
-          {
-            x: world.player.x,
-            z: world.player.z,
-            dirX: world.player.dirX,
-            dirZ: world.player.dirZ,
-            baseSpeed: world.player.baseSpeed,
-            dashCooldown: world.player.dashCooldown,
-            dashActiveTimer: world.player.dashActiveTimer,
-            invulnerableTimer: world.player.invulnerableTimer,
-            mods: world.player.mods,
-          },
-          threat,
-          world.ranvierNodes
-        );
+        doDash();
       }
     };
 
@@ -65,16 +66,14 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      world.player.hasMouse = true;
       _mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       _mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       _raycaster.setFromCamera(_mouse, camera);
       if (_raycaster.ray.intersectPlane(_plane, _intersect)) {
-        const dx = _intersect.x - world.player.x;
-        const dz = _intersect.z - world.player.z;
-        const len = Math.hypot(dx, dz) || 1;
-        world.player.aimX = dx / len;
-        world.player.aimZ = dz / len;
+        // Guardamos el punto del suelo; la simulación recalcula la dirección cada paso
+        world.player.mouseWX = _intersect.x;
+        world.player.mouseWZ = _intersect.z;
+        world.player.mouseIdle = 0;
       }
     };
 
@@ -83,22 +82,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     };
 
     const handleTouchDash = () => {
-      const threat = world.grid.anyThreatWithin(world.player.x, world.player.z, 3.5, () => true);
-      tryDash(
-        {
-          x: world.player.x,
-          z: world.player.z,
-          dirX: world.player.dirX,
-          dirZ: world.player.dirZ,
-          baseSpeed: world.player.baseSpeed,
-          dashCooldown: world.player.dashCooldown,
-          dashActiveTimer: world.player.dashActiveTimer,
-          invulnerableTimer: world.player.invulnerableTimer,
-          mods: world.player.mods,
-        },
-        threat,
-        world.ranvierNodes
-      );
+      doDash();
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -106,6 +90,8 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('trigger-touch-shoot', handleTouchShoot);
     window.addEventListener('trigger-touch-dash', handleTouchDash);
+    const handleTouchUlt = () => { world.ultRequest = true; };
+    window.addEventListener('trigger-touch-ult', handleTouchUlt);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -113,11 +99,13 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('trigger-touch-shoot', handleTouchShoot);
       window.removeEventListener('trigger-touch-dash', handleTouchDash);
+      window.removeEventListener('trigger-touch-ult', handleTouchUlt);
     };
   }, [camera]);
 
   useFrame((st, dt) => {
     if (!ref.current) return;
+    if (useRunStore.getState().phase !== 'playing') return;
     const p = world.player;
     const k = keys.current;
 
@@ -162,6 +150,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     p.z = THREE.MathUtils.clamp(p.z + p.vz * dt, -BOUNDS.z, BOUNDS.z);
 
     ref.current.setNextKinematicTranslation({ x: p.x, y: 0.5, z: p.z });
+    useGameStore.getState().setPlayerPosition([p.x, 0.5, p.z]);
 
     // 4. Timers de dash, invulnerabilidad e inercia
     if (p.dashActiveTimer > 0) p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);

@@ -25,6 +25,7 @@ export function RogueliteHUD({
   onToggleMute: () => void;
 }) {
   const bpBarRef = useRef<HTMLDivElement>(null);
+  const ultBarRef = useRef<HTMLDivElement>(null);
   const bpTextRef = useRef<HTMLSpanElement>(null);
   const xpBarRef = useRef<HTMLDivElement>(null);
   const lvlTextRef = useRef<HTMLSpanElement>(null);
@@ -64,7 +65,7 @@ export function RogueliteHUD({
       // Oleada y Región
       if (waveTextRef.current) {
         const rName = REGION_NAMES[s.region] ?? 'Corteza';
-        waveTextRef.current.textContent = `${rName} · Oleada ${s.wave + 1}/5`;
+        waveTextRef.current.textContent = `${rName}, oleada ${s.wave + 1}/5`;
       }
 
       // Dash Cooldown
@@ -73,6 +74,12 @@ export function RogueliteHUD({
         const maxCd = 1.2 * p.mods.dashCdMult;
         const readyPct = cd <= 0 ? 100 : Math.max(0, (1 - cd / maxCd) * 100);
         dashBarRef.current.style.width = `${readyPct}%`;
+      }
+
+      // Ola de Potenciación
+      if (ultBarRef.current) {
+        ultBarRef.current.style.width = `${p.ultCharge}%`;
+        ultBarRef.current.parentElement!.parentElement!.dataset.ready = p.ultCharge >= 100 ? 'true' : 'false';
       }
 
       // Escudo
@@ -92,7 +99,7 @@ export function RogueliteHUD({
         <div className="flex items-center gap-3 bg-neutral-950/80 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-neutral-800 shadow-lg pointer-events-auto">
           <div className="flex items-center gap-1.5 text-rose-400">
             <Heart className="w-5 h-5 fill-rose-500/30 text-rose-400 animate-pulse" />
-            <span ref={vitTextRef} className="font-mono text-sm sm:text-base font-bold text-white">
+            <span ref={vitTextRef} className="font-mono text-sm sm:text-base font-bold text-white whitespace-nowrap">
               3 / 3
             </span>
           </div>
@@ -111,7 +118,7 @@ export function RogueliteHUD({
         <div className="bg-neutral-950/80 backdrop-blur-md px-4 py-1.5 rounded-2xl border border-amber-500/30 shadow-lg text-center">
           <span
             ref={waveTextRef}
-            className="font-serif text-xs sm:text-sm font-semibold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-400"
+            className="whitespace-nowrap font-serif text-[0.7rem] sm:text-sm font-semibold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-400"
           >
             Corteza Prefrontal · Oleada 1/5
           </span>
@@ -190,6 +197,18 @@ export function RogueliteHUD({
                 style={{ width: '100%' }}
               />
             </div>
+          </div>
+
+          {/* Ola de Potenciación: se carga con neurotrofinas, se lanza con E */}
+          <div
+            title="Ola de Potenciación (E)"
+            className="ult-meter bg-neutral-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-neutral-800 shadow-lg flex items-center gap-2"
+          >
+            <span className="text-[0.7rem] font-semibold text-cyan-300">Ola</span>
+            <div className="w-14 h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
+              <div ref={ultBarRef} className="h-full bg-cyan-300 rounded-full" style={{ width: '0%' }} />
+            </div>
+            <span className="text-[0.7rem] text-neutral-400 hidden sm:inline">E</span>
           </div>
         </div>
       </div>

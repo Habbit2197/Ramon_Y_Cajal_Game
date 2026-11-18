@@ -24,20 +24,14 @@ export const G = {
   SWARM: 3,
 } as const;
 
-const KIND_OFFSET: Record<string, number> = {
-  swarmer: -200,
-  tank0: -120,
-  tank1: -80,
-  tank2: -40,
-  homing: 0,
-};
-
 export interface EnemyPoolProps {
   kind: EnemyKind;
   size: number;
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
 }
+
+const KIND_OFFSET: Record<string, number> = { swarmer: -200, tank0: -120, tank1: -80, tank2: -40, homing: 0 };
 
 export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
   const bodies = useRef<RapierRigidBody[]>(null);
@@ -46,11 +40,8 @@ export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
     () =>
       Array.from({ length: size }, (_, i) => ({
         key: `${kind}-${i}`,
-        position: [
-          KIND_OFFSET[kind] + (i % 16) * 2.5,
-          PARK.y,
-          Math.floor(i / 16) * 2.5,
-        ],
+        // Cada cuerpo aparcado en su propia celda: centros idénticos = normal de contacto indefinida = pánico de Rapier
+        position: [KIND_OFFSET[kind] + (i % 16) * 2.5, PARK.y, Math.floor(i / 16) * 2.5],
       })),
     [kind, size]
   );

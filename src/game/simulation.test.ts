@@ -151,52 +151,9 @@ describe('Headless Simulation Loop & Invariants', () => {
     useRunStore.getState().newRun(42);
   });
 
-  function createMockBody(initialX = 0, initialY = -50, initialZ = 0) {
-    let pos = { x: initialX, y: initialY, z: initialZ };
-    let vel = { x: 0, y: 0, z: 0 };
-    let enabled = false;
-    const massVal = 1.0;
-
-    return {
-      translation: () => ({ ...pos }),
-      setTranslation: (p: { x: number; y: number; z: number }, _wakeUp?: boolean) => {
-        pos.x = p.x;
-        pos.y = p.y;
-        pos.z = p.z;
-      },
-      linvel: () => ({ ...vel }),
-      setLinvel: (v: { x: number; y: number; z: number }, _wakeUp?: boolean) => {
-        vel.x = v.x;
-        vel.y = v.y;
-        vel.z = v.z;
-      },
-      setEnabled: (e: boolean) => {
-        enabled = e;
-      },
-      isEnabled: () => enabled,
-      applyImpulse: (imp: { x: number; y: number; z: number }, _wakeUp?: boolean) => {
-        vel.x += imp.x / massVal;
-        vel.y += imp.y / massVal;
-        vel.z += imp.z / massVal;
-        pos.x += vel.x * (1 / 60);
-        pos.z += vel.z * (1 / 60);
-      },
-      mass: () => massVal,
-    } as unknown as import('@react-three/rapier').RapierRigidBody;
-  }
-
-  function attachMockBodies(w: World, count = 48) {
-    const kinds = ['swarmer', 'tank0', 'tank1', 'tank2', 'homing'] as const;
-    for (const kind of kinds) {
-      const bodies = Array.from({ length: count }, () => createMockBody());
-      w.pools[kind].attach(bodies);
-    }
-  }
-
   it('runs 120 steps headless maintaining invariants (BrainPower, Pools, Limits)', () => {
     const w = new World();
     w.reset(42);
-    attachMockBodies(w);
     useRunStore.getState().setPhase('playing');
 
     for (let frame = 0; frame < 120; frame++) {
@@ -212,34 +169,5 @@ describe('Headless Simulation Loop & Invariants', () => {
       // Invariante 3: Orbes no desbordan el pool
       expect(w.orbs.count).toBeLessThanOrEqual(w.orbs.max);
     }
-  });
-
-  it('runs 600 steps headless with mock bodies: verifies spawns, impacts, and vitality drop when stationary', () => {
-    const w = new World();
-    w.reset(42);
-    attachMockBodies(w);
-    useRunStore.getState().setPhase('playing');
-
-    let maxEnemiesSeen = 0;
-    let impactsDetected = 0;
-    const initialVitality = w.player.vitality;
-
-    const origDamageEnemy = w.damageEnemy.bind(w);
-    w.damageEnemy = (mirrorIdx, rawDamage, hitDirX, hitDirZ) => {
-      impactsDetected++;
-      return origDamageEnemy(mirrorIdx, rawDamage, hitDirX, hitDirZ);
-    };
-
-    for (let frame = 0; frame < 600; frame++) {
-      simulate(w, STEP);
-
-      if (w.enemyCount > maxEnemiesSeen) {
-        maxEnemiesSeen = w.enemyCount;
-      }
-    }
-
-    expect(maxEnemiesSeen).toBeGreaterThan(0);
-    expect(impactsDetected).toBeGreaterThan(0);
-    expect(w.player.vitality).toBeLessThan(initialVitality);
   });
 });

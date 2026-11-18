@@ -54,6 +54,7 @@ function lowerTier(current: Tier): Tier {
 
 export function App3D() {
   const [tier, setTier] = useState<Tier>(detectInitialTier);
+  // Los pools se dimensionan UNA vez: recrear cuerpos Rapier en caliente deja referencias muertas en world.pools
   const [poolTier] = useState<Tier>(() => tier);
 
   useEffect(() => {

@@ -34,17 +34,22 @@ export const feel = {
   aberration: 0,
   killsThisFrame: 0,
 
+  /** Oyentes externos (medallas, tutorial). No afectan al feedback. */
+  listeners: new Set<(e: FeelEvent) => void>(),
+
   emit(e: FeelEvent) {
     const t = TABLE[e];
+    this.listeners.forEach((fn) => fn(e));
     if (e === 'kill' && ++this.killsThisFrame > 1) {
       // Evita acumulación excesiva de hit-stops en multi-bajas
       return;
     }
     hitStop(t.stop);
     this.trauma = Math.min(1, this.trauma + t.trauma);
-    this.zoom += t.zoom;
+    // Menos destellos: zoom y aberración cromática más suaves
+    this.zoom += t.zoom * (feelSettings.reducedFlashes ? 0.4 : 1);
     if (e === 'playerHurt') {
-      this.aberration = 1;
+      this.aberration = feelSettings.reducedFlashes ? 0.25 : 1;
     }
     if (t.vib && feelSettings.haptics && typeof navigator !== 'undefined') {
       try {

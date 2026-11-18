@@ -1,99 +1,100 @@
 /**
- * GameOverModal.tsx — Pantalla de fin de partida (Victoria / Muerte Sináptica)
- *
- * Muestra el balance de la partida, los datos descubiertos para el Cuaderno de Cajal
- * y citas históricas auténticas del Premio Nobel de Medicina de 1906.
+ * GameOverModal.tsx — Fin de partida del modo Arcade, con puesto en la clasificación.
  */
-
 import { motion } from 'motion/react';
-import { useRunStore, REGIONS } from '../../store/useRunStore';
-import { RotateCcw, Award, BookOpen, Brain } from 'lucide-react';
+import { RotateCcw, Home } from 'lucide-react';
+import { Leaderboard } from '../menu/Leaderboard';
 
-const CAJAL_DEFEAT_QUOTES = [
-  '«Todo ser humano puede ser, si se lo propone, escultor de su propio cerebro.» — Santiago Ramón y Cajal',
-  '«Las neuronas son células de formas delicadas y elegantes, las misteriosas mariposas del alma.» — Santiago Ramón y Cajal',
-  '«El cerebro es un mundo consistente en incontables continentes inexplorados y grandes extensiones de territorio desconocido.» — Santiago Ramón y Cajal',
+const CAJAL_QUOTES = [
+  '«Todo ser humano, si se lo propone, puede ser escultor de su propio cerebro.»',
+  '«Las misteriosas mariposas del alma, cuyo batir de alas quién sabe si esclarecerá algún día el secreto de la vida mental.»',
 ];
 
-export function GameOverModal() {
-  const phase = useRunStore((s) => s.phase);
-  const region = useRunStore((s) => s.region);
-  const wave = useRunStore((s) => s.wave);
-  const level = useRunStore((s) => s.level);
-  const fichas = useRunStore((s) => s.fichas);
-  const newRun = useRunStore((s) => s.newRun);
-  const setPhase = useRunStore((s) => s.setPhase);
+export interface ArcadeResult {
+  won: boolean;
+  score: number;
+  kills: number;
+  detail: string;
+  seconds: number;
+  rank: number | null;
+}
 
-  if (phase !== 'gameover') return null;
-
-  const quote = CAJAL_DEFEAT_QUOTES[region % CAJAL_DEFEAT_QUOTES.length];
+export function GameOverModal({ result, onRetry, onExit }: { result: ArcadeResult; onRetry: () => void; onExit: () => void }) {
+  const quote = CAJAL_QUOTES[result.kills % CAJAL_QUOTES.length];
+  const mins = Math.floor(result.seconds / 60);
+  const secs = Math.round(result.seconds % 60).toString().padStart(2, '0');
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-lg">
+    <div role="dialog" aria-modal="true" aria-labelledby="arcade-over-title" className="absolute inset-0 z-50 bg-[#020a0d]/85 backdrop-blur-md overflow-y-auto">
+      <div className="min-h-full flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: 12 }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="w-full max-w-lg bg-neutral-950/90 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl text-center"
+        className="w-full max-w-3xl grid gap-6 md:grid-cols-[1fr_17rem] rounded-3xl p-6 sm:p-8 bg-[#06161c]/95 border border-[#5ee6ff]/25"
       >
-        <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-4">
-          <Brain className="w-8 h-8 text-amber-400" />
+        <div className="flex flex-col gap-5">
+          <div>
+            <h2 id="arcade-over-title" className="font-display text-3xl sm:text-4xl text-white leading-tight">
+              {result.won ? 'Cerebro protegido' : 'Fin de la conducción'}
+            </h2>
+            <p className="mt-1.5 text-sm text-[#9fc6cf]">{result.detail}</p>
+          </div>
+
+          <div>
+            <div className="text-5xl sm:text-6xl font-semibold [font-variant-numeric:tabular-nums] text-[#7ff3ff] leading-none">{result.score.toLocaleString('es-ES')}</div>
+            <p className="mt-2 text-sm text-[#cfe9ee]">
+              {result.rank === 1
+                ? '¡Nuevo récord en este dispositivo!'
+                : result.rank
+                  ? `Puesto ${result.rank} de la clasificación.`
+                  : 'No ha entrado en el top 20 esta vez.'}
+            </p>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-xl bg-white/5 px-4 py-3">
+              <dt className="text-[#9fc6cf] text-xs">Toxinas eliminadas</dt>
+              <dd className="[font-variant-numeric:tabular-nums] text-lg text-white font-semibold">{result.kills}</dd>
+            </div>
+            <div className="rounded-xl bg-white/5 px-4 py-3">
+              <dt className="text-[#9fc6cf] text-xs">Tiempo</dt>
+              <dd className="[font-variant-numeric:tabular-nums] text-lg text-white font-semibold">
+                {mins}:{secs}
+              </dd>
+            </div>
+          </dl>
+
+          <blockquote className="text-sm italic font-display text-[#e8d5a8] leading-relaxed border-l-2 border-[#e8b45a]/50 pl-3">
+            {quote} <span className="not-italic text-[#a9a293]">Santiago Ramón y Cajal</span>
+          </blockquote>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={onRetry}
+              autoFocus
+              className="h-12 px-6 rounded-xl bg-[#5ee6ff] hover:bg-[#8ff0ff] text-[#03141a] font-semibold inline-flex items-center gap-2 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" aria-hidden />
+              Jugar otra vez
+            </button>
+            <button
+              type="button"
+              onClick={onExit}
+              className="h-12 px-5 rounded-xl border border-white/15 text-[#e9e3d6] hover:bg-white/5 inline-flex items-center gap-2 cursor-pointer"
+            >
+              <Home className="w-4 h-4" aria-hidden />
+              Menú principal
+            </button>
+          </div>
         </div>
 
-        <h2 className="text-3xl sm:text-4xl font-serif font-bold text-white mb-2">
-          Fin de la Conducción
-        </h2>
-        <p className="text-sm text-neutral-400 mb-6">
-          La red neuronal ha alcanzado su límite de fatiga metabólica frente a las toxinas.
-        </p>
-
-        {/* Resumen numérico */}
-        <div className="grid grid-cols-3 gap-3 bg-neutral-900/80 rounded-2xl p-4 border border-neutral-800 mb-6">
-          <div className="text-center">
-            <span className="text-[11px] text-neutral-400 uppercase tracking-wider block">Región</span>
-            <span className="text-lg font-serif font-bold text-amber-300">
-              {region + 1} / 3
-            </span>
-          </div>
-          <div className="text-center border-x border-neutral-800">
-            <span className="text-[11px] text-neutral-400 uppercase tracking-wider block">Nivel</span>
-            <span className="text-lg font-mono font-bold text-cyan-300">
-              {level}
-            </span>
-          </div>
-          <div className="text-center">
-            <span className="text-[11px] text-neutral-400 uppercase tracking-wider block">Fichas</span>
-            <span className="text-lg font-mono font-bold text-yellow-400">
-              +{fichas}
-            </span>
-          </div>
-        </div>
-
-        {/* Cita de Cajal */}
-        <div className="bg-amber-950/20 border border-amber-500/20 rounded-2xl p-4 mb-6 text-left">
-          <p className="text-xs sm:text-sm text-amber-200/90 italic font-serif leading-relaxed">
-            {quote}
-          </p>
-        </div>
-
-        {/* Botones de acción */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => newRun()}
-            className="flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-semibold text-sm tracking-wide shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reiniciar Sinapsis
-          </button>
-          <button
-            onClick={() => setPhase('title')}
-            className="py-3 px-5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 font-medium text-sm transition-all active:scale-95 cursor-pointer"
-          >
-            Menú Principal
-          </button>
+        <div className="md:border-l md:border-white/10 md:pl-6">
+          <Leaderboard initialMode="arcade" limit={8} compact />
         </div>
       </motion.div>
+      </div>
     </div>
   );
 }

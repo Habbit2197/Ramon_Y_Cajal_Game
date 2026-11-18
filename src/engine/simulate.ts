@@ -23,12 +23,15 @@ import { useRunStore } from '../store/useRunStore';
 import { pickAimTarget, AIM_MOBILE } from '../game/aim';
 
 const _steerOut: Vec2 = { x: 0, z: 0 };
+const ULT_RADIUS = 9;
+const ULT_DAMAGE = 70;
 
 export function simulate(w: World, dt: number) {
   const runStore = useRunStore.getState();
   if (runStore.phase !== 'playing') return;
 
   const p = w.player;
+  w.elapsed += dt;
 
   // ── 1. Director de spawns e IA de ritmo ──────────────────────────────
   w.director.step(dt, w);
@@ -66,43 +69,26 @@ export function simulate(w: World, dt: number) {
     }
   }
 
-  // ── Asistencia de apuntado / Auto-aim (móvil o sin ratón) ─────────
-  const isTouch =
-    typeof window !== 'undefined' &&
-    ('ontouchstart' in window ||
-      navigator.maxTouchPoints > 0 ||
-      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
-  const noMouse = !p.hasMouse;
-
-  if (isTouch || noMouse) {
-    const lookDirX = p.dirX !== 0 || p.dirZ !== 0 ? p.dirX : (p.aimX || 0);
-    const lookDirZ = p.dirX !== 0 || p.dirZ !== 0 ? p.dirZ : (p.aimZ || -1);
-    const targetIdx = pickAimTarget(
-      p.x,
-      p.z,
-      lookDirX,
-      lookDirZ,
-      m,
-      p.prevTargetId ?? -1,
-      AIM_MOBILE
-    );
-    if (targetIdx >= 0) {
-      p.prevTargetId = m.id[targetIdx];
-      const dx = m.x[targetIdx] - p.x;
-      const dz = m.z[targetIdx] - p.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 1e-4) {
-        p.aimX = dx / d;
-        p.aimZ = dz / d;
-      }
-    } else if (p.dirX !== 0 || p.dirZ !== 0) {
-      p.aimX = p.dirX;
-      p.aimZ = p.dirZ;
+  // ── 5. Sistema de armas y proyectiles ────────────────────────────────
+  // Apuntado: ratón si se ha movido en los últimos 2 s; si no (táctil, solo teclado), auto-aim
+  p.mouseIdle += dt;
+  if (p.mouseIdle < 2) {
+    const dx = p.mouseWX - p.x, dz = p.mouseWZ - p.z, len = Math.hypot(dx, dz);
+    if (len > 0.3) { p.aimX = dx / len; p.aimZ = dz / len; }
+  } else {
+    const t = pickAimTarget(p.x, p.z, p.dirX || p.aimX, p.dirZ || p.aimZ, m, p.aimTargetId, AIM_MOBILE);
+    if (t >= 0) {
+      const dx = m.x[t] - p.x, dz = m.z[t] - p.z, len = Math.hypot(dx, dz) || 1;
+      p.aimX = dx / len; p.aimZ = dz / len; p.aimTargetId = m.id[t];
+    } else {
+      p.aimTargetId = -1;
+      if (p.dirX || p.dirZ) { p.aimX = p.dirX; p.aimZ = p.dirZ; }
     }
   }
 
-  // ── 5. Sistema de armas y proyectiles ────────────────────────────────
-  const fireRate = BASE_WEAPON.fireRate * p.mods.fireRateMult;
+  // Fatiga del azúcar: dispara más despacio un rato y se recupera sola
+  p.fatigue = Math.max(0, p.fatigue - 0.12 * dt);
+  const fireRate = BASE_WEAPON.fireRate * p.mods.fireRateMult * (1 - 0.45 * p.fatigue);
   const fireInterval = 1 / fireRate;
   w.shootCooldown -= dt;
 
@@ -155,8 +141,24 @@ export function simulate(w: World, dt: number) {
   stepOrbs(w.orbs, p.x, p.z, p.mods.magnetMult, dt, (val) => {
     runStore.addXp(val);
     p.brainPower = Math.min(100, p.brainPower + 1.5);
+    p.ultCharge = Math.min(100, p.ultCharge + 4); // la Ola de Potenciación se carga con neurotrofinas
     feel.emit('hit');
   });
+
+  // ── 6b. Ola de Potenciación (tecla E / botón «Ola») ─────────────────
+  if (w.ultRequest) {
+    w.ultRequest = false;
+    if (p.ultCharge >= 100) {
+      p.ultCharge = 0;
+      p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.8);
+      for (let j = 0; j < m.count; j++) {
+        const dx = m.x[j] - p.x, dz = m.z[j] - p.z, d = Math.hypot(dx, dz);
+        if (d <= ULT_RADIUS) w.damageEnemy(j, ULT_DAMAGE * (1 - (d / ULT_RADIUS) * 0.5), dx / (d || 1), dz / (d || 1));
+      }
+      w.addRipple(p.x, p.z, 1.6);
+      feel.emit('ultimate');
+    }
+  }
 
   // ── 7. Colisión jugador-toxinas y debuffs educativos ─────────────────
   const playerRadius = 0.5;
@@ -173,7 +175,16 @@ export function simulate(w: World, dt: number) {
         } else {
           p.vitality -= 1;
           p.brainPower = Math.max(0, p.brainPower - 18);
-          p.invulnerableTimer = 1.0; // 1 segundo de i-frames tras golpe recibido
+          p.invulnerableTimer = 1.6; // i-frames tras golpe: margen para reaccionar
+          // Retroceso: las toxinas cercanas salen despedidas para no encadenar golpes
+          for (let j = 0; j < m.count; j++) {
+            const kx = m.x[j] - p.x, kz = m.z[j] - p.z, kd = Math.hypot(kx, kz);
+            if (kd > 3.5 || kd < 1e-3) continue;
+            const kb = w.pools[m.kind[j]].bodies[m.poolIndex[j]];
+            if (!kb) continue;
+            const f = (3.5 - kd) * 2.2 * kb.mass();
+            kb.applyImpulse({ x: (kx / kd) * f, y: 0, z: (kz / kd) * f }, true);
+          }
           feel.emit('playerHurt');
           w.director.onPlayerHurt();
 
