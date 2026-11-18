@@ -18,6 +18,7 @@ const base = new THREE.Vector3(0, 0, 0);
 const look = new THREE.Vector3(0, 0, 0);
 const HEIGHT = 18.5;
 const BACK = 10.0;
+const lead = new THREE.Vector3();
 const FOV = 46;
 
 export function CameraRig() {
@@ -26,12 +27,13 @@ export function CameraRig() {
 
   useFrame((state, dt) => {
     const p = world.player;
-    // Lookahead suave proyectado en la dirección de apuntado y movimiento
-    const ax = p.x + p.aimX * 2.2 + p.vx * 0.12;
-    const az = p.z + p.aimZ * 2.2 + p.vz * 0.12;
+    // Adelanto hacia donde te mueves, suavizado aparte: el auto-aim ya no hace dar bandazos a la cámara
+    lead.x = THREE.MathUtils.damp(lead.x, p.vx * 0.12, 3, dt);
+    lead.z = THREE.MathUtils.damp(lead.z, p.vz * 0.12, 3, dt);
 
-    base.x = THREE.MathUtils.damp(base.x, ax, 6, dt);
-    base.z = THREE.MathUtils.damp(base.z, az, 6, dt);
+    // Seguimiento firme: la bola nunca se queda «flotando» respecto a la cámara
+    base.x = THREE.MathUtils.damp(base.x, p.x + lead.x, 14, dt);
+    base.z = THREE.MathUtils.damp(base.z, p.z + lead.z, 14, dt);
 
     const t = state.clock.elapsedTime * 22;
     const k = feel.trauma ** 2 * (shakeScale ?? 1.0);

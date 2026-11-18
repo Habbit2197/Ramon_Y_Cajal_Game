@@ -11,7 +11,8 @@ import { checkPlayerName } from '../game/names';
 import { EMPTY_STATS, TROPHIES, newlyUnlocked, starsForWin, type PlayerStats } from '../game/trophies';
 import { useToastStore } from './useToastStore';
 
-export type GameMode = 'story' | 'arcade';
+export type GameMode = 'story' | 'arcade' | 'maze';
+export const GAME_MODES: GameMode[] = ['story', 'arcade', 'maze'];
 
 export interface ScoreEntry {
   id: string;
@@ -40,7 +41,7 @@ const emptyProgress = (): PlayerProgress => ({
   stats: { ...EMPTY_STATS, levelsCompleted: [] },
   stars: {},
   trophies: {},
-  onboarding: { story: false, arcade: false },
+  onboarding: { story: false, arcade: false, maze: false },
 });
 
 /** Clave del progreso: el alias sin mayúsculas ni espacios sobrantes */
@@ -80,6 +81,9 @@ interface ProfileState {
   recordStory: (r: StoryResult) => { stars: number };
   recordArcade: (c: ArcadeCheckpoint) => void;
   recordArcadeEnd: (r: { won: boolean; kills: number; region: number; wave: number; level: number }) => void;
+  /** Avances durante la partida del Laberinto (los incrementos se suman) */
+  recordMaze: (c: { level?: number; stuns?: number; bestChain?: number }) => void;
+  recordMazeEnd: (r: { level: number; score: number }) => void;
   setOnboardingSeen: (mode: GameMode, seen: boolean) => void;
 }
 
@@ -122,7 +126,7 @@ export const useProfileStore = create<ProfileState>()(
         const key = aliasKey(s.playerName);
         const prev = s.progress[key] ?? emptyProgress();
         const p: PlayerProgress = {
-          stats: { ...prev.stats, levelsCompleted: [...prev.stats.levelsCompleted] },
+          stats: { ...EMPTY_STATS, ...prev.stats, levelsCompleted: [...(prev.stats.levelsCompleted ?? [])] },
           stars: { ...prev.stars },
           trophies: { ...prev.trophies },
           onboarding: { ...prev.onboarding },
@@ -141,7 +145,7 @@ export const useProfileStore = create<ProfileState>()(
       return {
         playerName: '',
         avatar: 0,
-        leaderboard: { story: [], arcade: [] },
+        leaderboard: { story: [], arcade: [], maze: [] },
         progress: {},
         lastEntryId: null,
 
@@ -165,13 +169,13 @@ export const useProfileStore = create<ProfileState>()(
             detail,
             date: new Date().toISOString(),
           };
-          const { list, rank } = insertScore(s.leaderboard[mode], entry);
+          const { list, rank } = insertScore(s.leaderboard[mode] ?? [], entry);
           set({ leaderboard: { ...s.leaderboard, [mode]: list }, lastEntryId: rank ? entry.id : null });
           if (rank) update((p) => { p.stats.bestRank = Math.min(p.stats.bestRank, rank); });
           return rank;
         },
 
-        clearLeaderboard: () => set({ leaderboard: { story: [], arcade: [] }, lastEntryId: null }),
+        clearLeaderboard: () => set({ leaderboard: { story: [], arcade: [], maze: [] }, lastEntryId: null }),
 
         recordStory: (r) => {
           let stars = 0;
@@ -213,12 +217,28 @@ export const useProfileStore = create<ProfileState>()(
             if (r.won) st.arcadeWins++;
           }),
 
+        recordMaze: (c) =>
+          update((p) => {
+            const st = p.stats;
+            if (c.level !== undefined) st.mazeBestLevel = Math.max(st.mazeBestLevel, c.level);
+            if (c.bestChain !== undefined) st.mazeBestChain = Math.max(st.mazeBestChain, c.bestChain);
+            if (c.stuns) st.mazeStuns += c.stuns;
+          }),
+
+        recordMazeEnd: (r) =>
+          update((p) => {
+            const st = p.stats;
+            st.mazeGames++;
+            st.mazeBestLevel = Math.max(st.mazeBestLevel, r.level);
+            st.mazeBestScore = Math.max(st.mazeBestScore, r.score);
+          }),
+
         setOnboardingSeen: (mode, seen) => update((p) => { p.onboarding[mode] = seen; }),
       };
     },
     {
       name: 'cajal-profile',
-      version: 2,
+      version: 3,
       storage: safeStorage,
       partialize: (s) => ({
         playerName: s.playerName,
@@ -234,6 +254,12 @@ export const useProfileStore = create<ProfileState>()(
       migrate: (persisted, version) => {
         const s = (persisted ?? {}) as Partial<ProfileState>;
         if (version < 2) s.progress = {};
+        // v3: modo Laberinto (clasificación propia y estadísticas nuevas con valor por defecto)
+        s.leaderboard = Object.assign({ story: [], arcade: [], maze: [] }, s.leaderboard);
+        for (const p of Object.values(s.progress ?? {})) {
+          p.stats = { ...EMPTY_STATS, ...p.stats, fastestWin: p.stats?.fastestWin ?? 1e9, bestRank: p.stats?.bestRank ?? 1e9 };
+          p.onboarding = Object.assign({ story: false, arcade: false, maze: false }, p.onboarding);
+        }
         return s as ProfileState;
       },
     },

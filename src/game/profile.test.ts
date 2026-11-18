@@ -62,9 +62,9 @@ import { useProfileStore, aliasKey } from '../store/useProfileStore';
 import { useToastStore } from '../store/useToastStore';
 
 describe('Medallas', () => {
-  it('hay 20 medallas con ids únicos, cómo conseguirlas y un dato', () => {
-    expect(TROPHIES).toHaveLength(20);
-    expect(new Set(TROPHIES.map((t) => t.id)).size).toBe(20);
+  it('hay 25 medallas con ids únicos, cómo conseguirlas y un dato', () => {
+    expect(TROPHIES).toHaveLength(25);
+    expect(new Set(TROPHIES.map((t) => t.id)).size).toBe(25);
     for (const t of TROPHIES) { expect(t.how.length).toBeGreaterThan(5); expect(t.fact.length).toBeGreaterThan(20); }
   });
 
@@ -104,5 +104,21 @@ describe('Progreso por alias', () => {
     expect(s.progress[aliasKey('Otro')].stats.totalKills).toBe(12);
     expect(s.progress[aliasKey('Ana B')]).toBeUndefined();
     expect(s.progress[aliasKey('Otro')].trophies['hipocampo']).toBeTruthy();
+  });
+});
+
+describe('Modo Laberinto en el perfil', () => {
+  it('registra la partida, la clasificación propia y las medallas del laberinto', () => {
+    useToastStore.setState({ queue: [] });
+    useProfileStore.setState({ playerName: 'Laberinto', progress: {}, leaderboard: { story: [], arcade: [], maze: [] } });
+    const st = useProfileStore.getState();
+    st.recordMaze({ level: 3 });
+    st.recordMaze({ bestChain: 4 });
+    expect(st.submitScore('maze', 12000, 'Nivel 3')).toBe(1);
+    useProfileStore.getState().recordMazeEnd({ level: 3, score: 12000 });
+    const p = useProfileStore.getState().progress[aliasKey('Laberinto')];
+    expect(p.stats.mazeGames).toBe(1);
+    for (const id of ['red-activada', 'plasticidad', 'cadena-bdnf', 'insomnio-vencido']) expect(p.trophies[id], id).toBeTruthy();
+    expect(useProfileStore.getState().leaderboard.maze).toHaveLength(1);
   });
 });

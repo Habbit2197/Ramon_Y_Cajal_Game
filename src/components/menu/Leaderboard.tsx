@@ -5,8 +5,10 @@ import { useState } from 'react';
 import { useProfileStore, type GameMode } from '../../store/useProfileStore';
 import { NeuronGlyph, AVATAR_COLORS } from './NeuronGlyph';
 
-const MODE_LABEL: Record<GameMode, string> = { story: 'Historia', arcade: 'Arcade' };
+const MODE_LABEL: Record<GameMode, string> = { story: 'Historia', arcade: 'Arcade', maze: 'Laberinto' };
+const MODE_COLOR: Record<GameMode, string> = { story: 'bg-[#e8b45a] text-[#1a1206]', arcade: 'bg-[#5ee6ff] text-[#03141a]', maze: 'bg-[#b49cff] text-[#150a2e]' };
 
+const EMPTY: never[] = [];
 const dateFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' });
 
 export function Leaderboard({
@@ -19,7 +21,7 @@ export function Leaderboard({
   compact?: boolean;
 }) {
   const [mode, setMode] = useState<GameMode>(initialMode);
-  const entries = useProfileStore((s) => s.leaderboard[mode]);
+  const entries = useProfileStore((s) => s.leaderboard[mode]) ?? EMPTY;
   const lastEntryId = useProfileStore((s) => s.lastEntryId);
   const playerName = useProfileStore((s) => s.playerName);
   const clear = useProfileStore((s) => s.clearLeaderboard);
@@ -32,19 +34,15 @@ export function Leaderboard({
           Clasificación
         </h2>
         <div role="tablist" aria-label="Modo" className="flex rounded-full bg-white/5 p-0.5 text-xs">
-          {(['story', 'arcade'] as GameMode[]).map((m) => (
+          {(['story', 'arcade', 'maze'] as GameMode[]).map((m) => (
             <button
               key={m}
               role="tab"
               type="button"
               aria-selected={mode === m}
               onClick={() => setMode(m)}
-              className={`px-3 py-1 rounded-full transition-colors cursor-pointer ${
-                mode === m
-                  ? m === 'story'
-                    ? 'bg-[#e8b45a] text-[#1a1206] font-semibold'
-                    : 'bg-[#5ee6ff] text-[#03141a] font-semibold'
-                  : 'text-[#c9c2b4] hover:text-white'
+              className={`px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
+                mode === m ? `${MODE_COLOR[m]} font-semibold` : 'text-[#c9c2b4] hover:text-white'
               }`}
             >
               {MODE_LABEL[m]}

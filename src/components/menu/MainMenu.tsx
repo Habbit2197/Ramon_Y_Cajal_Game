@@ -139,6 +139,13 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
               blurb="Dentro del cerebro. Dispara impulsos, esquiva con mielina y elige mejoras entre oleadas."
               stain="fluor"
             />
+            <ModeSlide
+              selected={mode === 'maze'}
+              onSelect={() => onModeChange('maze')}
+              label="Laberinto"
+              blurb="Un comecocos por la red de neuronas. El modo más difícil."
+              stain="nissl"
+            />
           </fieldset>
 
           <div className="flex flex-wrap items-center gap-3 menu-enter" style={{ animationDelay: '180ms' }}>
@@ -148,14 +155,14 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
               onClick={onPlay}
               data-start="true"
               className={`h-14 px-8 rounded-2xl font-semibold text-base transition-[transform,background-color] active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
-                mode === 'story' ? 'bg-[#e8b45a] hover:bg-[#f2c470] text-[#1a1206]' : 'bg-[#5ee6ff] hover:bg-[#8ff0ff] text-[#03141a]'
+                { story: 'bg-[#e8b45a] hover:bg-[#f2c470] text-[#1a1206]', arcade: 'bg-[#5ee6ff] hover:bg-[#8ff0ff] text-[#03141a]', maze: 'bg-[#b49cff] hover:bg-[#c9b8ff] text-[#150a2e]' }[mode]
               }`}
             >
-              {mode === 'story' ? `Jugar: ${shortLevelName(LEVELS[levelIndex].name)}` : 'Jugar arcade'}
+              {mode === 'story' ? `Jugar: ${shortLevelName(LEVELS[levelIndex].name)}` : mode === 'arcade' ? 'Jugar arcade' : 'Jugar laberinto'}
             </button>
             {canPlay ? (
               <span className="text-sm text-[#c9c2b4] max-w-[17rem] leading-snug">
-                {mode === 'story' ? 'Objetivo: llena tu potencial cerebral al 100 % y cruza el portal de Cajal.' : 'Objetivo: sobrevive a 5 oleadas en cada una de las 3 regiones del cerebro.'}
+                {{ story: 'Objetivo: llena tu potencial cerebral al 100 % y cruza el portal de Cajal.', arcade: 'Objetivo: sobrevive a 5 oleadas en cada una de las 3 regiones del cerebro.', maze: 'Objetivo: recoge todas las vesículas de la red sin que te alcancen las toxinas.' }[mode]}
               </span>
             ) : (
               <span className="text-sm text-[#a9a293]">Primero elige tu alias.</span>
@@ -164,7 +171,7 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
 
           <footer className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[#a9a293] pt-2">
             <span className="hidden md:inline">
-              {mode === 'story' ? 'WASD o flechas para moverte, Espacio para el impulso' : 'WASD para moverte, el ratón apunta, Espacio para el impulso'}
+              {{ story: 'WASD o flechas para moverte, Espacio para el impulso', arcade: 'WASD para moverte, el ratón apunta, Espacio para el impulso', maze: 'Flechas o WASD para elegir camino, Espacio para disparar' }[mode]}
             </span>
             <span className="flex items-center gap-1 md:ml-auto">
               <button
@@ -239,7 +246,7 @@ function ModeSlide({
   onSelect: () => void;
   label: string;
   blurb: string;
-  stain: 'golgi' | 'fluor';
+  stain: 'golgi' | 'fluor' | 'nissl';
 }) {
   const golgi = stain === 'golgi';
   return (
@@ -250,7 +257,7 @@ function ModeSlide({
       onClick={onSelect}
       className={`slide group relative grid grid-cols-[minmax(8rem,40%)_1fr] text-left overflow-hidden rounded-[10px] cursor-pointer transition-[transform,opacity,box-shadow] duration-200 ${
         selected ? 'slide-selected' : 'opacity-70 hover:opacity-95'
-      } ${golgi ? 'slide-golgi' : 'slide-fluor'}`}
+      } slide-${stain}`}
     >
       {/* Etiqueta esmerilada de la preparación */}
       <span className="slide-label flex flex-col justify-between gap-1.5 p-3">
@@ -258,8 +265,8 @@ function ModeSlide({
         <span className="text-[0.72rem] leading-snug text-[#3b352b]">{blurb}</span>
       </span>
       {/* Muestra teñida */}
-      <span className="slide-specimen relative block h-full min-h-[6.75rem] p-2">
-        <SpecimenArt ink={golgi ? '#1b130a' : '#7ff3ff'} glow={!golgi} />
+      <span className="slide-specimen relative block h-[5.75rem] p-1.5">
+        <SpecimenArt ink={{ golgi: '#1b130a', fluor: '#7ff3ff', nissl: '#2a0f4a' }[stain]} glow={stain === 'fluor'} />
       </span>
     </button>
   );

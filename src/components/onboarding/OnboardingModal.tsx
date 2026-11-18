@@ -6,8 +6,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Droplet, Apple, Nut, BookOpen, Cloud, Candy, Wine, Heart, Star, Target, Zap, Sparkles, Crosshair, Waves, Trophy, Gamepad2,
+  Droplet, Apple, Nut, BookOpen, Cloud, Candy, Wine, Heart, Star, Target, Zap, Sparkles, Crosshair, Waves, Trophy, Gamepad2, Moon, Network,
 } from 'lucide-react';
+import { MAZE_RULES } from '../../game/maze/sim';
 import { ITEM_CATALOG } from '../../game/rules';
 import { STAR_RULES } from '../../game/trophies';
 import type { GameMode } from '../../store/useProfileStore';
@@ -208,12 +209,79 @@ function arcadeSteps(touch: boolean): Step[] {
   ];
 }
 
+function mazeSteps(touch: boolean): Step[] {
+  return [
+    {
+      title: 'Tu misión',
+      body: (
+        <div className="flex flex-col gap-4">
+          <p className="text-[#e9e3d6] leading-relaxed">
+            Eres un impulso nervioso que recorre una red de neuronas. Recoge todas las <strong className="text-[#ffd166]">vesículas doradas</strong> de los axones para
+            <strong className="text-[#c9b8ff]"> activar la red</strong> y pasar al siguiente nivel.
+          </p>
+          <ul className="flex flex-col gap-3">
+            <Row icon={<Network className="w-5 h-5" />} color="#7ff3ff" title="La red se enciende">Cada axón que limpias se ilumina. Cada nivel es una red nueva y más rápida.</Row>
+            <Row icon={<Heart className="w-5 h-5" />} color="#ff8fb1" title={`${MAZE_RULES.lives} vidas`}>Si una toxina te toca, pierdes una. Ganas una extra cada 10.000 puntos.</Row>
+          </ul>
+          <p className="text-sm text-[#c9c2b4]">Es el modo más difícil: piensa la ruta antes de entrar en un pasillo.</p>
+        </div>
+      ),
+    },
+    {
+      title: 'Moverte por los axones',
+      body: touch ? (
+        <ul className="flex flex-col gap-3">
+          <Row icon={<Gamepad2 className="w-5 h-5" />} color="#b49cff" title="Desliza o usa la cruceta">Desliza el dedo hacia donde quieras ir. Puedes indicar el giro antes de llegar a la neurona: lo tomará en cuanto pueda.</Row>
+          <Row icon={<Target className="w-5 h-5" />} color="#7ff3ff" title="Media vuelta">Puedes dar la vuelta en cualquier momento, también en mitad de un axón.</Row>
+        </ul>
+      ) : (
+        <div className="flex flex-col gap-3 text-[#e9e3d6]">
+          <div className="flex items-center gap-3"><span className="flex gap-1"><Key>↑</Key><Key>←</Key><Key>↓</Key><Key>→</Key></span> o <span className="flex gap-1"><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></span></div>
+          <p className="text-sm text-[#c9c2b4]">Pulsa el giro antes de llegar a la neurona: lo tomará en cuanto pueda. Puedes dar media vuelta en cualquier momento.</p>
+          <div className="flex items-center gap-3"><Key>Espacio</Key> disparar</div>
+          <div className="flex items-center gap-3"><Key>P</Key> o <Key>Esc</Key> pausa</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Disparo de frente',
+      body: (
+        <ul className="flex flex-col gap-3">
+          <Row icon={<Crosshair className="w-5 h-5" />} color="#ffd166" title="Hacia donde apunta la flecha">El impulso viaja por el axón en línea recta hasta la siguiente curva. Si alcanza a una toxina, la deja aturdida unos segundos.</Row>
+          <Row icon={<Zap className="w-5 h-5" />} color="#ffd166" title={`${MAZE_RULES.charges} cargas`}>Se recargan solas. Aturdir no elimina: la toxina vuelve a por ti, así que úsalo para escapar.</Row>
+        </ul>
+      ),
+    },
+    {
+      title: 'El BDNF da la vuelta a la partida',
+      body: (
+        <ul className="flex flex-col gap-3">
+          <Row icon={<Sparkles className="w-5 h-5" />} color="#ffd166" title="Cuatro esferas doradas">Están en las esquinas. Al cogerlas, las toxinas se vuelven azules y huyen.</Row>
+          <Row icon={<Target className="w-5 h-5" />} color="#7ff3ff" title="Neutralízalas">Tócalas mientras están azules: vuelven a la guarida. Cada una seguida vale el doble.</Row>
+          <Row icon={<Crosshair className="w-5 h-5" />} color="#ffd166" title="Disparo en 4 direcciones">Mientras dura el BDNF, cada disparo sale hacia todos los caminos posibles.</Row>
+        </ul>
+      ),
+    },
+    {
+      title: 'Conoce a las toxinas',
+      body: (
+        <ul className="flex flex-col gap-3">
+          <Row icon={<Cloud className="w-5 h-5" />} color="#c3b4e6" title="Nicotina">Te persigue sin descanso, siempre por el camino más corto.</Row>
+          <Row icon={<Candy className="w-5 h-5" />} color="#ff9f5a" title="Azúcar">Intenta cortarte el paso: va hacia donde estarás, no hacia donde estás.</Row>
+          <Row icon={<Wine className="w-5 h-5" />} color="#ff6b6b" title="Alcohol">Va dando tumbos: a veces te persigue y a veces gira al azar.</Row>
+          <Row icon={<Moon className="w-5 h-5" />} color="#6f8cff" title="Insomnio">Te ronda de lejos y, cuando se acerca, se aparta. Es el más difícil de prever.</Row>
+        </ul>
+      ),
+    },
+  ];
+}
+
 export function OnboardingModal({ mode, onDone }: { mode: GameMode; onDone: () => void }) {
   const [touch] = useState(isTouchDevice);
-  const steps = mode === 'story' ? storySteps(touch) : arcadeSteps(touch);
+  const steps = mode === 'story' ? storySteps(touch) : mode === 'arcade' ? arcadeSteps(touch) : mazeSteps(touch);
   const [i, setI] = useState(0);
   const last = i === steps.length - 1;
-  const accent = mode === 'story' ? '#e8b45a' : '#5ee6ff';
+  const accent = mode === 'story' ? '#e8b45a' : mode === 'arcade' ? '#5ee6ff' : '#b49cff';
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -231,7 +299,7 @@ export function OnboardingModal({ mode, onDone }: { mode: GameMode; onDone: () =
         <div className="w-full max-w-lg rounded-3xl bg-[#121a2a]/95 border p-6 sm:p-7 flex flex-col gap-5" style={{ borderColor: `${accent}55` }}>
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm" style={{ color: accent }}>
-              {mode === 'story' ? 'Modo Historia' : 'Modo Arcade'}, paso {i + 1} de {steps.length}
+              {{ story: 'Modo Historia', arcade: 'Modo Arcade', maze: 'Modo Laberinto' }[mode]}, paso {i + 1} de {steps.length}
             </span>
             <button type="button" onClick={onDone} className="text-sm text-[#a9a293] hover:text-white hover:underline cursor-pointer">
               Saltar
@@ -262,7 +330,7 @@ export function OnboardingModal({ mode, onDone }: { mode: GameMode; onDone: () =
                 autoFocus
                 onClick={() => (last ? onDone() : setI(i + 1))}
                 className="h-11 px-5 rounded-xl font-semibold cursor-pointer"
-                style={{ background: accent, color: mode === 'story' ? '#1a1206' : '#03141a' }}
+                style={{ background: accent, color: { story: '#1a1206', arcade: '#03141a', maze: '#150a2e' }[mode] }}
               >
                 {last ? '¡A jugar!' : 'Siguiente'}
               </button>

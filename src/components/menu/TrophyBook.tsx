@@ -12,6 +12,7 @@ const GROUPS: { id: TrophyGroup; title: string; color: string }[] = [
   { id: 'general', title: 'Generales', color: '#f4efe6' },
   { id: 'story', title: 'Modo Historia', color: '#e8b45a' },
   { id: 'arcade', title: 'Modo Arcade', color: '#5ee6ff' },
+  { id: 'maze', title: 'Modo Laberinto', color: '#b49cff' },
 ];
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' });
@@ -88,12 +89,14 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
           <section className="menu-panel rounded-2xl p-5">
             <h3 className="font-display text-lg text-white">Tus números</h3>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <Stat label="Partidas" value={st.storyGames + st.arcadeGames} />
+              <Stat label="Partidas" value={st.storyGames + st.arcadeGames + (st.mazeGames ?? 0)} />
               <Stat label="Hábitos recogidos" value={st.habitsCollected} />
               <Stat label="Niveles completados" value={st.levelsCompleted.length} suffix=" de 3" />
               <Stat label="Toxinas eliminadas" value={st.totalKills} />
               <Stat label="Impulsos perfectos" value={st.perfectDashes} />
               <Stat label="Mejor nivel arcade" value={st.arcadeBestLevel} />
+              <Stat label="Mejor nivel laberinto" value={st.mazeBestLevel ?? 1} />
+              <Stat label="Toxinas aturdidas" value={st.mazeStuns ?? 0} />
             </dl>
           </section>
         </div>

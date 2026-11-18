@@ -9,6 +9,7 @@ import type { HudSnapshot } from '../Canvas3D';
 import { world } from '../../engine/world';
 import { useRunStore } from '../../store/useRunStore';
 import { isTouchDevice } from './OnboardingModal';
+import type { MazeState } from '../../game/maze/sim';
 
 interface CoachStep {
   text: string;
@@ -18,7 +19,7 @@ interface CoachStep {
   autoAdvance?: number;
 }
 
-function Coach({ steps, accent, paused, onFinish, placement = 'top' }: { steps: CoachStep[]; accent: string; paused: () => boolean; onFinish: () => void; placement?: 'top' | 'bottom' }) {
+function Coach({ steps, accent, paused, onFinish, placement = 'top' }: { steps: CoachStep[]; accent: string; paused: () => boolean; onFinish: () => void; placement?: 'top' | 'bottom' | 'top-low' }) {
   const [i, setI] = useState(0);
   const [ticked, setTicked] = useState(false);
   const shownAt = useRef(performance.now());
@@ -51,7 +52,7 @@ function Coach({ steps, accent, paused, onFinish, placement = 'top' }: { steps: 
   if (!step) return null;
 
   return (
-    <div className={`fixed left-1/2 -translate-x-1/2 z-[35] w-[min(92vw,30rem)] pointer-events-none ${placement === 'top' ? 'top-20 sm:top-24' : 'top-[13.5rem] sm:top-auto sm:bottom-[6.5rem]'}`} aria-live="polite">
+    <div className={`fixed left-1/2 -translate-x-1/2 z-[35] w-[min(92vw,30rem)] pointer-events-none ${placement === 'top' ? 'top-20 sm:top-24' : placement === 'top-low' ? 'top-[10.5rem] sm:top-20 sm:left-auto sm:right-6 sm:translate-x-0 sm:w-[26rem]' : 'top-[13.5rem] sm:top-auto sm:bottom-[6.5rem]'}`} aria-live="polite">
       <AnimatePresence mode="wait">
         <motion.div
           key={i}
@@ -158,4 +159,46 @@ export function ArcadeCoach({ active, onFinish }: { active: boolean; onFinish: (
 
   if (!active) return null;
   return <Coach steps={steps} accent="#5ee6ff" paused={() => useRunStore.getState().phase !== 'playing'} onFinish={onFinish} />;
+}
+
+export function MazeCoach({ active, state, onFinish }: { active: boolean; state: React.MutableRefObject<MazeState>; onFinish: () => void }) {
+  const touch = isTouchDevice();
+  const startLeft = useRef<number | null>(null);
+  const sawPower = useRef(false);
+
+  const steps: CoachStep[] = [
+    {
+      text: touch ? 'Desliza el dedo (o usa la cruceta) para elegir camino.' : 'Usa las flechas o W A S D. Puedes pulsar el giro antes de llegar a la neurona.',
+      done: () => {
+        const s = state.current;
+        startLeft.current ??= s.pelletsLeft;
+        return s.phase === 'playing' && s.pelletsLeft <= startLeft.current - 6;
+      },
+    },
+    {
+      text: touch ? 'Pulsa «Disparar»: el impulso sale hacia donde apunta la flecha y aturde a las toxinas.' : 'Pulsa Espacio: el impulso sale hacia donde apunta la flecha y aturde a las toxinas.',
+      done: () => state.current.charges < 3 || state.current.stuns > 0,
+    },
+    {
+      text: 'Tienes 3 cargas y se recargan solas. Dispara solo cuando una toxina venga de frente.',
+      done: () => false,
+      autoAdvance: 6,
+    },
+    {
+      text: 'Ve a por un BDNF dorado de las esquinas: podrás neutralizar toxinas tocándolas y disparar en 4 direcciones.',
+      done: () => {
+        if (state.current.power > 0) sawPower.current = true;
+        return sawPower.current;
+      },
+      autoAdvance: 40,
+    },
+    {
+      text: '¡Bien! Recoge todas las vesículas para activar la red y pasar de nivel.',
+      done: () => false,
+      autoAdvance: 5,
+    },
+  ];
+
+  if (!active) return null;
+  return <Coach steps={steps} accent="#b49cff" paused={() => state.current.phase !== 'playing'} onFinish={onFinish} placement="top-low" />;
 }

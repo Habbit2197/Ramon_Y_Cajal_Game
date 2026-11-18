@@ -24,6 +24,11 @@ export interface PlayerStats {
   tankSplits: number;
   evolutions: number;
   bestRank: number; // mejor puesto en cualquier clasificación (Infinity si nunca)
+  mazeGames: number;
+  mazeBestLevel: number; // nivel máximo alcanzado en el Laberinto
+  mazeStuns: number;
+  mazeBestChain: number; // toxinas neutralizadas con un mismo BDNF
+  mazeBestScore: number;
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -43,9 +48,14 @@ export const EMPTY_STATS: PlayerStats = {
   tankSplits: 0,
   evolutions: 0,
   bestRank: Infinity,
+  mazeGames: 0,
+  mazeBestLevel: 1,
+  mazeStuns: 0,
+  mazeBestChain: 0,
+  mazeBestScore: 0,
 };
 
-export type TrophyGroup = 'general' | 'story' | 'arcade';
+export type TrophyGroup = 'general' | 'story' | 'arcade' | 'maze';
 
 export interface TrophyDef {
   id: string;
@@ -69,20 +79,20 @@ export const TROPHIES: TrophyDef[] = [
     id: 'primera-sinapsis', group: 'general', name: 'Primera sinapsis',
     how: 'Juega tu primera partida.',
     fact: 'Una sinapsis es el punto donde una neurona pasa su mensaje a otra. Cajal fue quien demostró que las neuronas son células separadas.',
-    check: (s) => s.storyGames + s.arcadeGames >= 1,
+    check: (s) => s.storyGames + s.arcadeGames + s.mazeGames >= 1,
   },
   {
-    id: 'dos-mundos', group: 'general', name: 'Dos mundos',
-    how: 'Juega al menos una partida en cada modo.',
+    id: 'dos-mundos', group: 'general', name: 'Tres mundos',
+    how: 'Juega al menos una partida en cada uno de los tres modos.',
     fact: 'Cajal dibujó a mano miles de neuronas mirando por su microscopio. Muchos de sus dibujos se siguen usando hoy en las clases.',
-    check: (s) => s.storyGames >= 1 && s.arcadeGames >= 1,
+    check: (s) => s.storyGames >= 1 && s.arcadeGames >= 1 && s.mazeGames >= 1,
   },
   {
     id: 'constancia', group: 'general', name: 'Constancia',
     how: 'Juega 10 partidas.',
     fact: 'Practicar algo muchas veces refuerza las conexiones entre neuronas: por eso lo que repites se te da cada vez mejor.',
-    check: (s) => s.storyGames + s.arcadeGames >= 10,
-    progress: (s) => ratio(s.storyGames + s.arcadeGames, 10),
+    check: (s) => s.storyGames + s.arcadeGames + s.mazeGames >= 10,
+    progress: (s) => ratio(s.storyGames + s.arcadeGames + s.mazeGames, 10),
   },
   {
     id: 'podio', group: 'general', name: 'En el podio',
@@ -195,6 +205,40 @@ export const TROPHIES: TrophyDef[] = [
     fact: 'Se calcula que el cerebro humano tiene unos 86.000 millones de neuronas.',
     check: (s) => s.arcadeBestLevel >= 10,
     progress: (s) => ratio(s.arcadeBestLevel, 10),
+  },
+
+  // ── Modo Laberinto ──────────────────────────────────────────────────────
+  {
+    id: 'red-activada', group: 'maze', name: 'Red activada',
+    how: 'Completa el nivel 1 del Laberinto.',
+    fact: 'Cuando aprendes algo nuevo, se activan juntas redes de neuronas que antes apenas trabajaban en equipo.',
+    check: (s) => s.mazeBestLevel >= 2,
+  },
+  {
+    id: 'plasticidad', group: 'maze', name: 'Plasticidad',
+    how: 'Llega al nivel 3 del Laberinto.',
+    fact: 'En 1949, Donald Hebb propuso que las neuronas que se activan a la vez refuerzan su conexión: así aprendemos.',
+    check: (s) => s.mazeBestLevel >= 3,
+  },
+  {
+    id: 'cadena-bdnf', group: 'maze', name: 'Cadena de BDNF',
+    how: 'Neutraliza 4 toxinas con un mismo BDNF.',
+    fact: 'El BDNF ayuda a las neuronas a sobrevivir y a formar conexiones nuevas. Hacer ejercicio lo aumenta.',
+    check: (s) => s.mazeBestChain >= 4,
+  },
+  {
+    id: 'aturdidor', group: 'maze', name: 'Impulso certero',
+    how: 'Aturde 25 toxinas disparando.',
+    fact: 'Los neurotransmisores cruzan la sinapsis en milésimas de segundo para pasar el mensaje a la siguiente neurona.',
+    check: (s) => s.mazeStuns >= 25,
+    progress: (s) => ratio(s.mazeStuns, 25),
+  },
+  {
+    id: 'insomnio-vencido', group: 'maze', name: 'Insomnio vencido',
+    how: 'Consigue 10.000 puntos en el Laberinto.',
+    fact: 'Dormir bien ayuda a consolidar lo aprendido: mientras duermes, el cerebro ordena los recuerdos del día.',
+    check: (s) => s.mazeBestScore >= 10000,
+    progress: (s) => ratio(s.mazeBestScore, 10000),
   },
 ];
 

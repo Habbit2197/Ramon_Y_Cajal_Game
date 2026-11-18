@@ -128,3 +128,9 @@
   color: #03141a;
   box-shadow: 0 0 22px -4px var(--fluor);
 }
+
+/* Tercera preparación: tinción de Nissl (violeta de cresilo) */
+.slide-nissl .slide-specimen {
+  background: radial-gradient(ellipse 80% 90% at 55% 50%, #c9a8ff 0%, #8e63d9 50%, #4a2a86 100%);
+}
+.slide-selected.slide-nissl { box-shadow: 0 0 0 2px #b49cff, 0 14px 34px -14px #b49cff; }

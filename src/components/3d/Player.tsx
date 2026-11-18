@@ -32,6 +32,7 @@ export interface PlayerProps {
 export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
   const ref = useRef<RapierRigidBody>(null);
   const nucleusRef = useRef<THREE.Group>(null);
+  const visualRef = useRef<THREE.Group>(null);
   const myelinSheathRef = useRef<THREE.Mesh>(null);
   const shieldMeshRef = useRef<THREE.Mesh>(null);
   const { camera } = useThree();
@@ -150,6 +151,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     p.z = THREE.MathUtils.clamp(p.z + p.vz * dt, -BOUNDS.z, BOUNDS.z);
 
     ref.current.setNextKinematicTranslation({ x: p.x, y: 0.5, z: p.z });
+    visualRef.current?.position.set(p.x, 0.5, p.z); // la malla sigue a la simulación sin esperar a Rapier
     useGameStore.getState().setPlayerPosition([p.x, 0.5, p.z]);
 
     // 4. Timers de dash, invulnerabilidad e inercia
@@ -180,9 +182,10 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     if (shieldMeshRef.current) {
       shieldMeshRef.current.visible = p.shieldActive;
     }
-  });
+  }, -2); // antes que GameLoop (-1): sin un paso de retraso
 
   return (
+    <>
     <RigidBody
       ref={ref}
       type="kinematicPosition"
@@ -191,7 +194,8 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
       name="player-body"
       enabledTranslations={[true, false, true]}
       lockRotations
-    >
+    />
+    <group ref={visualRef} name="PlayerVisual">
       <group ref={nucleusRef} name="PlayerNucleus">
         {/* Núcleo Neuronal en Icosaedro HDR wireframe (Bloom selectivo) */}
         <mesh>
@@ -236,7 +240,8 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
           />
         </mesh>
       </group>
-    </RigidBody>
+    </group>
+    </>
   );
 }
 

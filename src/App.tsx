@@ -16,6 +16,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainMenu } from './components/menu/MainMenu';
 import { StoryPauseModal, StoryOutcomeModal, timeBonus } from './modes/StoryModals';
 import { ArcadeMode } from './modes/ArcadeMode';
+import { MazeMode } from './modes/maze/MazeMode';
 import { LEVELS } from './game/rules';
 import { soundEngine } from './game/sound';
 import { useGameStore } from './store/useGameStore';
@@ -30,7 +31,7 @@ import { SettingsPanel } from './components/menu/SettingsPanel';
 
 const GddModal = lazy(() => import('./components/GddModal').then((m) => ({ default: m.GddModal })));
 
-type Screen = 'menu' | 'story' | 'arcade';
+type Screen = 'menu' | 'story' | 'arcade' | 'maze';
 
 const INITIAL_HUD: HudSnapshot = {
   brainPower: 20,
@@ -76,7 +77,7 @@ export default function App() {
 
   // Contrato del Game Shell: el estado visible en <body data-state>
   useEffect(() => {
-    document.body.dataset.state = screen === 'arcade' ? 'arcade' : canvasState;
+    document.body.dataset.state = screen === 'arcade' || screen === 'maze' ? screen : canvasState;
   }, [screen, canvasState]);
 
   const toggleMute = useCallback(() => setMuted(soundEngine.toggleMute()), []);
@@ -107,7 +108,7 @@ export default function App() {
     (m: GameMode, withCoach: boolean) => {
       setCoach(withCoach ? m : null);
       if (m === 'story') startStory(levelIndex);
-      else setScreen('arcade');
+      else setScreen(m);
     },
     [levelIndex, startStory],
   );
@@ -174,7 +175,7 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden select-none bg-[#0b1220]">
-      {screen !== 'arcade' && (
+      {(screen === 'menu' || screen === 'story') && (
         <ErrorBoundary>
           <Canvas3D
             appState={canvasState}
@@ -248,6 +249,18 @@ export default function App() {
           coach={coach === 'arcade'}
           onCoachDone={() => setCoach(null)}
           onHelp={() => setOnboarding({ mode: 'arcade', thenStart: false })}
+          helpOpen={!!onboarding}
+        />
+      )}
+
+      {screen === 'maze' && (
+        <MazeMode
+          onExit={backToMenu}
+          muted={muted}
+          onToggleMute={toggleMute}
+          coach={coach === 'maze'}
+          onCoachDone={() => setCoach(null)}
+          onHelp={() => setOnboarding({ mode: 'maze', thenStart: false })}
           helpOpen={!!onboarding}
         />
       )}

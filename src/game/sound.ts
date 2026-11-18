@@ -51,6 +51,25 @@ class SoundEngine {
     });
   }
 
+  /** Blip muy corto (vesícula del laberinto). Alterna dos tonos, como el «waka» clásico. */
+  private blipFlip = false;
+  public playBlip(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.blipFlip = !this.blipFlip;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(this.blipFlip ? 520 : 400, now);
+    gain.gain.setValueAtTime(0.035, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.07);
+  }
+
   public playHazardHit(): void {
     const ctx = this.getContext();
     if (!ctx) return;
