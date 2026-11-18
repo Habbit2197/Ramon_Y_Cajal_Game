@@ -14,6 +14,7 @@ import { RigidBody, RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { world } from '../../engine/world';
 import { tryDash } from '../../game/dash';
+import { useGameStore } from '../../store/useGameStore';
 
 const BOUNDS = { x: 13.5, z: 9.5 };
 const _raycaster = new THREE.Raycaster();
@@ -37,7 +38,8 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
-      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+      keys.current[e.key.toLowerCase()] = true;
+      if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === ' ') {
         const threat = world.grid.anyThreatWithin(world.player.x, world.player.z, 3.5, () => true);
         tryDash(
           {
@@ -59,6 +61,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       keys.current[e.code] = false;
+      keys.current[e.key.toLowerCase()] = false;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -120,10 +123,15 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     // 1. Lectura del input de dirección
     let inX = 0;
     let inZ = 0;
-    if (k['KeyW'] || k['ArrowUp']) inZ -= 1;
-    if (k['KeyS'] || k['ArrowDown']) inZ += 1;
-    if (k['KeyA'] || k['ArrowLeft']) inX -= 1;
-    if (k['KeyD'] || k['ArrowRight']) inX += 1;
+    if (k['KeyW'] || k['ArrowUp'] || k['w']) inZ -= 1;
+    if (k['KeyS'] || k['ArrowDown'] || k['s']) inZ += 1;
+    if (k['KeyA'] || k['ArrowLeft'] || k['a']) inX -= 1;
+    if (k['KeyD'] || k['ArrowRight'] || k['d']) inX += 1;
+
+    // Joystick táctil
+    const jv = useGameStore.getState().joystickVector;
+    inX += jv.x;
+    inZ += jv.z;
 
     const len = Math.hypot(inX, inZ);
     if (len > 0) {
@@ -153,6 +161,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
     p.z = THREE.MathUtils.clamp(p.z + p.vz * dt, -BOUNDS.z, BOUNDS.z);
 
     ref.current.setNextKinematicTranslation({ x: p.x, y: 0.5, z: p.z });
+    useGameStore.getState().setPlayerPosition([p.x, 0.5, p.z]);
 
     // 4. Timers de dash, invulnerabilidad e inercia
     if (p.dashActiveTimer > 0) p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);

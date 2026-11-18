@@ -188,3 +188,29 @@ test('Agile Shooter: adding projectile, destroying enemy and increasing BrainPow
   assert.equal(useGameStore.getState().projectiles.length, 0);
   assert.equal(useGameStore.getState().brainPower, Math.min(100, initialPower + 10));
 });
+
+test('useGameStore: Game Flow (playerName, currentLevel, gameState and actions)', () => {
+  const store = useGameStore.getState();
+
+  // Initial state check
+  assert.equal(store.playerName, '');
+  assert.equal(store.currentLevel, 1);
+  assert.equal(store.gameState, 'menu');
+
+  // Set player name
+  useGameStore.getState().setPlayerName('Santiago');
+  assert.equal(useGameStore.getState().playerName, 'Santiago');
+
+  // Start game
+  useGameStore.getState().startGame();
+  assert.equal(useGameStore.getState().gameState, 'playing');
+  assert.equal(useGameStore.getState().brainPower, 100);
+
+  // Next level
+  useGameStore.getState().nextLevel();
+  assert.equal(useGameStore.getState().currentLevel, 2);
+
+  // Game over
+  useGameStore.getState().gameOver();
+  assert.equal(useGameStore.getState().gameState, 'gameover');
+});

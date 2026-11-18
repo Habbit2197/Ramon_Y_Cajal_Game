@@ -3,6 +3,7 @@
  *
  * - Enemigos/Toxinas físicos dinámicos: RigidBody type="dynamic"
  * - Colisiones e impactos con proyectiles: destruye al enemigo, lo elimina del store y suma 'BrainPower' al jugador.
+ * - Lógica de niveles: usa currentLevel de Zustand para multiplicar la cantidad de enemigos y reducir el tiempo de spawn.
  * - Seguimiento suave hacia la posición del jugador.
  */
 
@@ -24,14 +25,30 @@ const ENEMY_EMISSIVE: Record<Enemy['type'], string> = {
   junk:    '#78350f',
 };
 
-function getInitialEnemies(): Enemy[] {
-  return [
-    { id: 'e1', position: [ 4, 0.5,  3], type: 'smoke',   hp: 1 },
-    { id: 'e2', position: [-5, 0.5,  2], type: 'alcohol', hp: 1 },
-    { id: 'e3', position: [ 6, 0.5, -4], type: 'junk',    hp: 1 },
-    { id: 'e4', position: [-3, 0.5, -5], type: 'smoke',   hp: 1 },
-    { id: 'e5', position: [ 0, 0.5,  7], type: 'alcohol', hp: 1 },
-  ];
+/**
+ * Genera oleada de toxinas escaladas por el nivel actual (currentLevel)
+ */
+function generateEnemiesForLevel(level: number): Enemy[] {
+  const types: Array<Enemy['type']> = ['smoke', 'alcohol', 'junk'];
+  // Cantidad base 4, escalada con currentLevel: 4 + (level - 1) * 2
+  const count = Math.min(18, 4 + (level - 1) * 2);
+  const list: Enemy[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+    const dist = 6.5 + Math.random() * 4.5; // Distribuidas en el perímetro de la arena
+    const x = Math.sin(angle) * dist;
+    const z = Math.cos(angle) * dist;
+    const type = types[i % types.length];
+    list.push({
+      id: `e-lvl${level}-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      position: [x, 0.5, z],
+      type,
+      hp: level >= 3 && type === 'alcohol' ? 2 : 1,
+    });
+  }
+
+  return list;
 }
 
 interface EnemyEntityProps {
@@ -41,6 +58,7 @@ interface EnemyEntityProps {
 const EnemyEntity: React.FC<EnemyEntityProps> = ({ enemy }) => {
   const rbRef = useRef<RapierRigidBody>(null);
   const playerPos = useGameStore((s) => s.playerPosition);
+  const currentLevel = useGameStore((s) => s.currentLevel);
   const removeEnemy = useGameStore((s) => s.removeEnemy);
   const increasePower = useGameStore((s) => s.increasePower);
   const removeProjectile = useGameStore((s) => s.removeProjectile);
@@ -48,7 +66,7 @@ const EnemyEntity: React.FC<EnemyEntityProps> = ({ enemy }) => {
   const color = ENEMY_COLORS[enemy.type];
   const emissive = ENEMY_EMISSIVE[enemy.type];
 
-  // Movimiento dinámico hacia la posición del jugador
+  // Movimiento dinámico hacia la posición del jugador escalado por el nivel
   useFrame((_state, delta) => {
     const rb = rbRef.current;
     if (!rb) return;
@@ -60,7 +78,10 @@ const EnemyEntity: React.FC<EnemyEntityProps> = ({ enemy }) => {
     const dist = Math.sqrt(dx * dx + dz * dz);
     if (dist < 0.6) return;
 
-    const speed = enemy.type === 'smoke' ? 1.8 : enemy.type === 'alcohol' ? 2.4 : 1.6;
+    // Velocidad base + bono de agresividad por nivel
+    const baseSpeed = enemy.type === 'smoke' ? 1.8 : enemy.type === 'alcohol' ? 2.4 : 1.6;
+    const speed = baseSpeed * (1 + (currentLevel - 1) * 0.12);
+
     const factor = (speed * dt) / dist;
     rb.setLinvel({ x: (dx * factor) / dt, y: 0, z: (dz * factor) / dt }, true);
   });
@@ -124,14 +145,55 @@ const EnemyEntity: React.FC<EnemyEntityProps> = ({ enemy }) => {
 
 export const EnemySystem: React.FC = () => {
   const enemies = useGameStore((s) => s.enemies);
+  const currentLevel = useGameStore((s) => s.currentLevel);
+  const gameState = useGameStore((s) => s.gameState);
   const spawnEnemies = useGameStore((s) => s.spawnEnemies);
 
-  // Spawn inicial de toxinas
+  const prevLevelRef = useRef(currentLevel);
+  const spawnCooldownRef = useRef(0);
+
+  // Intervalo de spawn reducido a medida que sube el nivel: max(1.2s, 4.0s - level * 0.5s)
+  const spawnInterval = Math.max(1.2, 4.0 - currentLevel * 0.5);
+
+  // Spawn inicial o regeneración al quedar vacía la oleada
   useEffect(() => {
-    if (enemies.length === 0) {
-      spawnEnemies(getInitialEnemies());
+    if (gameState === 'playing' && enemies.length === 0) {
+      spawnEnemies(generateEnemiesForLevel(currentLevel));
     }
-  }, [enemies.length, spawnEnemies]);
+  }, [gameState, enemies.length, currentLevel, spawnEnemies]);
+
+  // Si cambia el nivel, respawnear nueva oleada escalada
+  useEffect(() => {
+    if (prevLevelRef.current !== currentLevel) {
+      prevLevelRef.current = currentLevel;
+      if (gameState === 'playing') {
+        spawnEnemies(generateEnemiesForLevel(currentLevel));
+      }
+    }
+  }, [currentLevel, gameState, spawnEnemies]);
+
+  // Spawn dinámico periódico durante la partida
+  useFrame((_state, delta) => {
+    if (gameState !== 'playing') return;
+
+    spawnCooldownRef.current += delta;
+    const maxEnemies = 4 + currentLevel * 2;
+
+    if (spawnCooldownRef.current >= spawnInterval && enemies.length < maxEnemies) {
+      spawnCooldownRef.current = 0;
+      const types: Array<Enemy['type']> = ['smoke', 'alcohol', 'junk'];
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 7 + Math.random() * 4;
+      const newEnemy: Enemy = {
+        id: `e-dyn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        position: [Math.sin(angle) * dist, 0.5, Math.cos(angle) * dist],
+        type: types[Math.floor(Math.random() * types.length)],
+        hp: 1,
+      };
+      const current = useGameStore.getState().enemies;
+      spawnEnemies([...current, newEnemy]);
+    }
+  });
 
   return (
     <>

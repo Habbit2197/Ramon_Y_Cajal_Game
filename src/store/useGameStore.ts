@@ -21,6 +21,15 @@ export interface Enemy {
 }
 
 export interface GameStoreState {
+  // ── Flujo de Juego y Niveles ──────────────────────────────────────────────
+  playerName: string;
+  currentLevel: number;
+  gameState: 'menu' | 'playing' | 'gameover';
+  setPlayerName: (name: string) => void;
+  startGame: () => void;
+  nextLevel: () => void;
+  gameOver: () => void;
+
   // ── Brain power ───────────────────────────────────────────────────────────
   brainPower: number;
   increasePower: (amount: number) => void;
@@ -69,6 +78,29 @@ export interface GameStoreState {
 }
 
 export const useGameStore = create<GameStoreState>((set) => ({
+  // ── Flujo de Juego y Niveles ──────────────────────────────────────────────
+  playerName: '',
+  currentLevel: 1,
+  gameState: 'menu',
+  setPlayerName: (name: string) => set({ playerName: name }),
+  startGame: () =>
+    set({
+      gameState: 'playing',
+      brainPower: 100,
+      score: 0,
+      combo: 0,
+      projectiles: [],
+      dashCooldown: 0,
+      dashActive: false,
+    }),
+  nextLevel: () =>
+    set((state) => ({
+      currentLevel: state.currentLevel + 1,
+      brainPower: Math.min(100, state.brainPower + 20),
+      projectiles: [],
+    })),
+  gameOver: () => set({ gameState: 'gameover' }),
+
   // ── Brain power ───────────────────────────────────────────────────────────
   brainPower: 50,
   increasePower: (amount: number) =>
