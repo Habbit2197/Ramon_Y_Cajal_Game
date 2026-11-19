@@ -76,7 +76,9 @@ describe('Arcade: partida completa con enemigos', () => {
     const wavesSeen = new Set<string>();
     let regionDrafts = 0;
     let emptyDrafts = 0;
-    const unsub = useRunStore.subscribe((s) => wavesSeen.add(`${s.region}-${s.wave}`));
+    const record = (s: { region: number; wave: number }) => wavesSeen.add(`${s.region}-${s.wave}`);
+    record(useRunStore.getState()); // la oleada inicial ya está puesta antes de suscribirse
+    const unsub = useRunStore.subscribe(record);
     play(
       1800,
       (offer) => {
