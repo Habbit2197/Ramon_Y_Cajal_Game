@@ -1,0 +1,18 @@
+# Cabeceras para el _headers de la RAÍZ del sitio santiagoramonycajal.org (Cloudflare Pages).
+# Cloudflare solo lee el _headers de la raíz, por eso el juego no trae uno propio.
+
+/juegos/cajal-sinapsis/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/juegos/cajal-sinapsis/sw.js
+  Cache-Control: no-cache
+
+/juegos/cajal-sinapsis/
+  Cache-Control: no-cache
+
+/juegos/cajal-sinapsis/index.html
+  Cache-Control: no-cache
+
+/juegos/cajal-sinapsis/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache

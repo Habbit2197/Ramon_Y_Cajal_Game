@@ -1,6 +1,0 @@
-{
-  "name": "Cajal: Sinapsis 3D",
-  "description": "Juego educativo 3D sobre hábitos saludables y neurociencia guiado por Santiago Ramón y Cajal, con Documento de Diseño (GDD) interactivo.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

@@ -5,61 +5,54 @@ import path from 'path';
 import crypto from 'crypto';
 import {defineConfig} from 'vite';
 
+/**
+ * Ruta en la que se publica el juego dentro del archivo: https://santiagoramonycajal.org/juegos/<slug>/
+ * Se puede cambiar al compilar: BASE_PATH=/otra/ruta/ npm run build  (debe empezar y acabar en «/»)
+ */
+const BASE = process.env.BASE_PATH ?? '/juegos/cajal-sinapsis/';
+/** Prefijo propio de las cachés: otros juegos del mismo dominio no se tocan entre sí */
+const CACHE_PREFIX = 'cajal-sinapsis-';
+
 export default defineConfig(() => {
   return {
+    base: BASE,
     plugins: [
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
-      {
-        name: 'copy-unbundled-src-assets',
-        apply: 'build',
-        closeBundle(error?: Error): void {
-          if (error) {
-            return;
-          }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
-          const distAssets = path.resolve(distDir, 'src/assets');
-          if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
-            fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
-          }
-        },
-      },
       // Service worker para jugar sin internet: se genera al compilar con la lista exacta de archivos
       {
         name: 'cajal-service-worker',
         apply: 'build',
         closeBundle(error?: Error): void {
           if (error) return;
-          const distDir = path.resolve(__dirname, 'dist');
+          const distDir = path.resolve(import.meta.dirname, 'dist');
           if (!fs.existsSync(distDir)) return;
           const files: string[] = [];
           const walk = (dir: string) => {
             for (const f of fs.readdirSync(dir)) {
               const full = path.join(dir, f);
               if (fs.statSync(full).isDirectory()) walk(full);
-              else files.push('/' + path.relative(distDir, full).split(path.sep).join('/'));
+              else files.push(path.relative(distDir, full).split(path.sep).join('/'));
             }
           };
           walk(distDir);
-          const precache = files.filter((f) => f !== '/sw.js' && f !== '/_headers' && !f.endsWith('.map'));
+          const precache = files.filter((f) => f !== 'sw.js' && f !== '_headers' && !f.endsWith('.map'));
           const hash = crypto.createHash('sha256');
           for (const f of precache) hash.update(f + fs.statSync(path.join(distDir, f)).size);
           hash.update(fs.readFileSync(path.join(distDir, 'index.html')));
-          const template = fs.readFileSync(path.resolve(__dirname, 'sw-template.js'), 'utf8');
+          const template = fs.readFileSync(path.resolve(import.meta.dirname, 'sw-template.js'), 'utf8');
           const sw = template
-            .replace('__CACHE_NAME__', 'cajal-' + hash.digest('hex').slice(0, 12))
-            .replace('__PRECACHE__', JSON.stringify(['/', ...precache], null, 0));
+            .replaceAll('__CACHE_PREFIX__', CACHE_PREFIX)
+            .replaceAll('__CACHE_NAME__', CACHE_PREFIX + hash.digest('hex').slice(0, 12))
+            .replaceAll('__BASE__', BASE)
+            .replaceAll('__PRECACHE__', JSON.stringify([BASE, ...precache.map((f) => BASE + f)], null, 0));
           fs.writeFileSync(path.join(distDir, 'sw.js'), sw);
         },
       },
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {
