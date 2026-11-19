@@ -25,7 +25,7 @@ export const GameHud: React.FC<GameHudProps> = ({
   virtualInputRef,
 }) => {
   const [ghostBrainPower, setGhostBrainPower] = useState(hud.brainPower);
-  const [dockCollapsed, setDockCollapsed] = useState(false);
+  const [dockCollapsed, setDockCollapsed] = useState<boolean>(() => typeof window !== 'undefined' && window.innerHeight < 520); // en pantallas bajas (móvil en horizontal) la guía empieza plegada
 
   // Delayed trailing ghost bar when BrainPower drops or rises
   useEffect(() => {
@@ -40,7 +40,7 @@ export const GameHud: React.FC<GameHudProps> = ({
   const isBoosted = hud.speedModifier > 1.05;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
+    <div className="fixed inset-0 pointer-events-none z-10 flex flex-col justify-between safe-pad safe-pad-sm">
       {/* TOP PERIMETER ROW: Top-Left Neural Cluster & Top-Right Utility Controls */}
       <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         {/* Top-Left Cluster: BrainPower (Red Neuronal), Vitality Pips & Speed Physics */}
@@ -276,7 +276,7 @@ export const GameHud: React.FC<GameHudProps> = ({
       {/* BOTTOM UNIFIED DOCK: Collapsible Cajal Mentor Plaque & Mobile Touch Controls */}
       <div className="flex flex-col items-center gap-2">
         {/* Mobile Touch Controls (Visible on small screens) */}
-        <div className="pointer-events-auto flex md:hidden items-center justify-between w-full max-w-sm px-2 mb-1">
+        <div className="pointer-events-auto flex pointer-fine:hidden items-center justify-between w-full max-w-sm px-2 mb-1">
           <div className="grid grid-cols-3 gap-1.5">
             <div />
             <button

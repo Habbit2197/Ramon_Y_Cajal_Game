@@ -156,8 +156,20 @@ export function simulate(w: World, dt: number) {
         if (d <= ULT_RADIUS) w.damageEnemy(j, ULT_DAMAGE * (1 - (d / ULT_RADIUS) * 0.5), dx / (d || 1), dz / (d || 1));
       }
       w.addRipple(p.x, p.z, 1.6);
+      if (p.mods.infiniteDashOnUlt) p.dashFreeTimer = 4;
       feel.emit('ultimate');
     }
+  }
+
+  // ── 6c. Escudo glial: se activa y recarga solo si tienes la carta ──
+  if (p.mods.shieldCharges > 0 && !p.shieldActive) {
+    p.shieldTimer -= dt;
+    if (p.shieldTimer <= 0) p.shieldActive = true;
+  }
+  // Impulso saltatorio: impulso sin recarga durante unos segundos tras la Ola
+  if (p.dashFreeTimer > 0) {
+    p.dashFreeTimer -= dt;
+    p.dashCooldown = 0;
   }
 
   // ── 7. Colisión jugador-toxinas y debuffs educativos ─────────────────
@@ -169,11 +181,13 @@ export function simulate(w: World, dt: number) {
       if (p.invulnerableTimer <= 0) {
         if (p.shieldActive) {
           p.shieldActive = false;
+          p.shieldTimer = p.mods.shieldRecharge || 12;
           p.invulnerableTimer = 0.6;
           feel.emit('hit');
           w.addRipple(p.x, p.z, 0.8);
         } else {
           p.vitality -= 1;
+          w.hitsThisRegion++;
           p.brainPower = Math.max(0, p.brainPower - 18);
           p.invulnerableTimer = 1.6; // i-frames tras golpe: margen para reaccionar
           // Retroceso: las toxinas cercanas salen despedidas para no encadenar golpes
@@ -210,7 +224,8 @@ export function simulate(w: World, dt: number) {
   flushSplits(w);
 
   // ── 9. Verificación de final de oleada ────────────────────────────────
-  if (w.director.budget <= 0 && w.enemyCount === 0) {
+  // (también espera a los enemigos anunciados que aún no han aparecido)
+  if (w.director.budget <= 0 && w.enemyCount === 0 && w.telegraphs.count === 0) {
     runStore.nextWave();
   }
 }

@@ -11,20 +11,18 @@ import { CuboidCollider } from '@react-three/rapier';
 
 export const ARENA_BOUNDS = { x: 14.0, z: 10.0 };
 
-export function Arena() {
-  const borderGeo = useMemo(() => {
-    const x = ARENA_BOUNDS.x;
-    const z = ARENA_BOUNDS.z;
-    const pts = [
-      new THREE.Vector3(-x, 0.1, -z),
-      new THREE.Vector3(x, 0.1, -z),
-      new THREE.Vector3(x, 0.1, z),
-      new THREE.Vector3(-x, 0.1, z),
-      new THREE.Vector3(-x, 0.1, -z),
-    ];
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, []);
+const X = ARENA_BOUNDS.x, Z = ARENA_BOUNDS.z, T = 0.16, FAR = 60;
+/** [x, z, ancho, fondo] de las cuatro barras del borde */
+const BORDER: [number, number, number, number][] = [
+  [0, -Z, 2 * X + T, T], [0, Z, 2 * X + T, T], [-X, 0, T, 2 * Z + T], [X, 0, T, 2 * Z + T],
+];
+/** [x, z, ancho, fondo] de las cuatro zonas exteriores oscurecidas */
+const OUTSIDE: [number, number, number, number][] = [
+  [0, -Z - FAR / 2, 2 * (X + FAR), FAR], [0, Z + FAR / 2, 2 * (X + FAR), FAR],
+  [-X - FAR / 2, 0, FAR, 2 * Z], [X + FAR / 2, 0, FAR, 2 * Z],
+];
 
+export function Arena() {
   return (
     <group name="Arena">
       {/* Muros con CuboidCollider estáticos de Rapier */}
@@ -33,10 +31,20 @@ export function Arena() {
       <CuboidCollider position={[0, 0.5, -ARENA_BOUNDS.z - 0.5]} args={[ARENA_BOUNDS.x + 1, 1.5, 0.5]} />
       <CuboidCollider position={[0, 0.5, ARENA_BOUNDS.z + 0.5]} args={[ARENA_BOUNDS.x + 1, 1.5, 0.5]} />
 
-      {/* Línea perimétrica sináptica */}
-      <lineLoop geometry={borderGeo}>
-        <lineBasicMaterial color={new THREE.Color(0.2, 0.8, 1.4)} toneMapped={false} transparent opacity={0.6} />
-      </lineLoop>
+      {/* Borde luminoso grueso: se ve bien también en móviles pequeños */}
+      {BORDER.map(([px, pz, sx, sz], i) => (
+        <mesh key={i} position={[px, 0.08, pz]}>
+          <boxGeometry args={[sx, 0.1, sz]} />
+          <meshBasicMaterial color={[0.35, 1.6, 2.4]} toneMapped={false} />
+        </mesh>
+      ))}
+      {/* Fuera de la arena, el tejido se oscurece: el límite se lee de un vistazo */}
+      {OUTSIDE.map(([px, pz, sx, sz], i) => (
+        <mesh key={`o${i}`} position={[px, 0.06, pz]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[sx, sz]} />
+          <meshBasicMaterial color="#01040a" transparent opacity={0.62} depthWrite={false} />
+        </mesh>
+      ))}
     </group>
   );
 }

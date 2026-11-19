@@ -2,6 +2,9 @@
  * aim.ts — Asistencia de apuntado inteligente para ratón, gamepad y auto-aim en móvil
  */
 
+/** A menos de esta distancia, una toxina es una amenaza inmediata y tiene prioridad */
+export const AIM_DANGER_RADIUS = 3.2;
+
 export interface AimOpts {
   range: number;
   coneCos: number;
@@ -52,10 +55,11 @@ export function pickAimTarget(
     const cos = (dx * dirX + dz * dirZ) / d;
     if (cos < o.coneCos) continue;
 
-    let s = cos * 1.5 - d / o.range + (enemies.threat[i] || 1) * 0.8;
-    if (enemies.id[i] === prevId) {
-      s += o.stickiness; // Histéresis para evitar parpadeo entre objetivos
-    }
+    // La cercanía manda: una toxina que se te echa encima gana a cualquier otra lejana
+    let s = (-d / o.range) * 2.2 + cos * 0.5 + (enemies.threat[i] || 1) * 0.4;
+    if (d < AIM_DANGER_RADIUS) s += 2;
+    // Histéresis para no parpadear entre dos objetivos parecidos, pero sin «quedarse colgado» de uno lejano
+    if (enemies.id[i] === prevId && d < o.range * 0.8) s += o.stickiness;
 
     if (s > bestScore) {
       bestScore = s;

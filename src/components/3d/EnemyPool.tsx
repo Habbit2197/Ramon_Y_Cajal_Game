@@ -14,7 +14,8 @@ import {
   type InstancedRigidBodyProps,
   interactionGroups,
 } from '@react-three/rapier';
-import { world } from '../../engine/world';
+import { useFrame } from '@react-three/fiber';
+import { world, HIT_FLASH } from '../../engine/world';
 import { type EnemyKind, PARK } from '../../game/enemies/pool';
 
 export const G = {
@@ -33,6 +34,9 @@ export interface EnemyPoolProps {
 
 const KIND_OFFSET: Record<string, number> = { swarmer: -200, tank0: -120, tank1: -80, tank2: -40, homing: 0 };
 
+const WHITE = new THREE.Color(1, 1, 1);
+const _flash = new THREE.Color();
+
 export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
   const bodies = useRef<RapierRigidBody[]>(null);
 
@@ -45,6 +49,29 @@ export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
       })),
     [kind, size]
   );
+
+  // Destello al impactar: el color de la instancia sube a HDR y vuelve en 0,12 s
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  useEffect(() => {
+    if (!mesh.current) return;
+    for (let i = 0; i < size; i++) mesh.current.setColorAt(i, WHITE);
+    if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
+  }, [size]);
+  useFrame((_, dt) => {
+    const pool = world.pools[kind];
+    if (!mesh.current || !pool.flash.length) return;
+    let changed = false;
+    for (let i = 0; i < pool.flash.length; i++) {
+      const f = pool.flash[i];
+      if (f <= -1) continue; // en reposo: no hay nada que actualizar
+      const k = Math.max(0, f) / HIT_FLASH;
+      _flash.setScalar(1 + k * 2.6);
+      mesh.current.setColorAt(i, _flash);
+      pool.flash[i] = f > 0 ? f - dt : -1; // al terminar, vuelve al color normal y queda en reposo
+      changed = true;
+    }
+    if (changed && mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
+  });
 
   useEffect(() => {
     if (!bodies.current) return;
@@ -74,6 +101,7 @@ export function EnemyPool({ kind, size, geometry, material }: EnemyPoolProps) {
       collisionGroups={collisionGroup}
     >
       <instancedMesh
+        ref={mesh}
         args={[geometry, material, size]}
         frustumCulled={false}
       />

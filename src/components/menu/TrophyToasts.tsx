@@ -19,7 +19,7 @@ export function TrophyToasts() {
   }, [current, shift]);
 
   return (
-    <div aria-live="polite" className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] pointer-events-none w-[min(92vw,26rem)]">
+    <div aria-live="polite" style={{ top: "max(1rem, env(safe-area-inset-top))" }} className="fixed left-1/2 -translate-x-1/2 z-[60] pointer-events-none w-[min(92vw,26rem)]">
       <AnimatePresence>
         {current && (
           <motion.div

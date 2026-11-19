@@ -48,7 +48,7 @@ export function TouchControls() {
   };
 
   return (
-    <div className="absolute inset-x-0 bottom-[10.5rem] sm:bottom-40 z-40 flex items-end justify-between px-5 pointer-events-none select-none">
+    <div className="absolute inset-x-0 portrait:bottom-[10.5rem] landscape:bottom-4 z-40 flex items-end justify-between pointer-events-none select-none" style={{ paddingLeft: "max(1.25rem, env(safe-area-inset-left))", paddingRight: "max(1.25rem, env(safe-area-inset-right))", marginBottom: "env(safe-area-inset-bottom)" }}>
       <div
         ref={baseRef}
         role="slider"

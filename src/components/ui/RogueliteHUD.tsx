@@ -65,7 +65,7 @@ export function RogueliteHUD({
       // Oleada y Región
       if (waveTextRef.current) {
         const rName = REGION_NAMES[s.region] ?? 'Corteza';
-        waveTextRef.current.textContent = `${rName}, oleada ${s.wave + 1}/5`;
+        waveTextRef.current.textContent = s.endless ? `Modo infinito, oleada ${s.wave + 1}` : `${rName}, oleada ${s.wave + 1}/5`;
       }
 
       // Dash Cooldown
@@ -92,7 +92,7 @@ export function RogueliteHUD({
   }, []);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-30 flex flex-col justify-between p-3 sm:p-5">
+    <div className="absolute inset-0 pointer-events-none z-30 flex flex-col justify-between safe-pad safe-pad-sm">
       {/* Barra superior: Vitalidad, Región y Ajustes */}
       <div className="flex items-start justify-between w-full">
         {/* Vitalidad y Escudo */}
@@ -144,7 +144,7 @@ export function RogueliteHUD({
       </div>
 
       {/* Barra inferior: BrainPower (Salud Mental) y Barra de XP (Neurotrofinas BDNF) */}
-      <div className="w-full max-w-xl mx-auto flex flex-col gap-2 pointer-events-auto mb-1">
+      <div className="w-full max-w-xl pointer-coarse:landscape:max-w-[min(36rem,calc(100vw-22rem))] mx-auto flex flex-col gap-2 pointer-events-auto mb-1">
         {/* Medidor de BrainPower */}
         <div className="bg-neutral-950/85 backdrop-blur-md p-2.5 rounded-2xl border border-neutral-800 shadow-xl">
           <div className="flex items-center justify-between text-xs mb-1.5 px-1">

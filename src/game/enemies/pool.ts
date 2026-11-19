@@ -25,6 +25,8 @@ export class EnemyPoolSim {
   gen = new Uint8Array(0);
   timer = new Float32Array(0);
   dmgMult = new Float32Array(0);
+  /** Destello al recibir un impacto (segundos restantes) */
+  flash = new Float32Array(0);
 
   constructor(public kind: EnemyKind) {}
 
@@ -32,6 +34,7 @@ export class EnemyPoolSim {
     this.bodies = b;
     const n = b.length;
     this.alive = new Uint8Array(n);
+    this.flash = new Float32Array(n);
     this.hp = new Float32Array(n);
     this.gen = new Uint8Array(n);
     this.timer = new Float32Array(n);

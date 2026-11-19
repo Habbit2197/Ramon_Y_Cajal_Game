@@ -134,3 +134,24 @@
   background: radial-gradient(ellipse 80% 90% at 55% 50%, #c9a8ff 0%, #8e63d9 50%, #4a2a86 100%);
 }
 .slide-selected.slide-nissl { box-shadow: 0 0 0 2px #b49cff, 0 14px 34px -14px #b49cff; }
+
+
+/* ── Móvil: sin tirón de recarga ni zoom por doble toque; respeta la muesca ── */
+html,
+body {
+  overscroll-behavior: none;
+  touch-action: manipulation; /* pellizcar sigue funcionando en los menús; el doble toque ya no hace zoom */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+canvas {
+  touch-action: none; /* el juego recibe todos los gestos */
+}
+.safe-pad {
+  padding-top: max(var(--pad-y, 1rem), env(safe-area-inset-top));
+  padding-bottom: max(var(--pad-y, 1rem), env(safe-area-inset-bottom));
+  padding-left: max(var(--pad-x, 1rem), env(safe-area-inset-left));
+  padding-right: max(var(--pad-x, 1rem), env(safe-area-inset-right));
+}
+.safe-pad-sm { --pad-x: 0.75rem; --pad-y: 0.75rem; }
+@media (min-width: 640px) { .safe-pad-sm { --pad-x: 1.25rem; --pad-y: 1.25rem; } }

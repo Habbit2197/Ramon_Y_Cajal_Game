@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Zips de entrega: no se suben al repositorio
+*.zip

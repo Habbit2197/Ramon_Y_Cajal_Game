@@ -19,6 +19,7 @@ import {
   STARTER_CARDS,
 } from '../game/upgrades';
 import { world } from '../engine/world';
+import { useProfileStore } from './useProfileStore';
 
 const safeStorage = createJSONStorage(() => {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -33,10 +34,19 @@ const safeStorage = createJSONStorage(() => {
 });
 
 export type Phase = 'title' | 'playing' | 'draft' | 'regionClear' | 'paused' | 'gameover';
+/** Oleadas por región (antes había 6 y el contador llegaba a «6/5») */
+export const WAVES_PER_REGION = 5;
+
 export const REGIONS = ['corteza', 'hipocampo', 'cerebelo'] as const;
 
 export interface RunSlice {
   phase: Phase;
+  /** Modo infinito tras superar las tres regiones */
+  endless: boolean;
+  /** Estrellas de cada región en esta partida, y las de la última superada */
+  regionStars: number[];
+  lastRegionStars: number;
+  continueEndless: () => void;
   /** true si se superaron las tres regiones */
   runWon: boolean;
   region: number;
@@ -76,6 +86,9 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
         // ── Slice de Partida Actual ──
         phase: 'title',
         runWon: false,
+        endless: false,
+        regionStars: [],
+        lastRegionStars: 0,
         region: 0,
         wave: 0,
         level: 1,
@@ -102,6 +115,7 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
           }
 
           set({ xp, level, xpToNext: next });
+          if (ups > 0 && s.mods.healOnLevel) world.player.vitality = world.player.mods.maxVitality;
 
           if (ups > 0) {
             get().openDraft('level');
@@ -141,36 +155,73 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
             };
           }),
 
-        nextWave: () =>
-          set((s) => {
-            if (s.wave < 5) {
-              const nextW = s.wave + 1;
-              world.wave = nextW;
-              world.score += 150 * nextW;
-              world.director.startWave(nextW, s.region, world);
-              return { wave: nextW, phase: 'playing' };
-            } else {
-              // Fin de la región
-              const nextR = s.region + 1;
-              if (nextR >= REGIONS.length) {
-                // Las tres regiones superadas: victoria de la partida
-                world.score += 3000;
-                return { runWon: true, phase: 'gameover', bestRegion: REGIONS.length, fichas: s.fichas + 5 };
-              }
-              world.score += 1000;
-              world.region = nextR;
-              world.wave = 0;
-              world.director.startWave(0, nextR, world);
-              return {
-                wave: 0,
-                region: nextR,
-                rerolls: s.rerolls + 1,
-                bestRegion: Math.max(s.bestRegion, nextR),
-                fichas: s.fichas + 3,
-                phase: 'regionClear',
-              };
-            }
-          }),
+        nextWave: () => {
+          const s = get();
+          const p = world.player;
+
+          // ── Modo infinito: oleadas sin fin, cada vez más duras ──
+          if (s.endless) {
+            const nextW = s.wave + 1;
+            world.wave = nextW;
+            world.score += 200 + 20 * nextW;
+            world.director.startWave(nextW % WAVES_PER_REGION, REGIONS.length + Math.floor(nextW / WAVES_PER_REGION), world);
+            useProfileStore.getState().recordArcade({ endlessWave: nextW + 1 });
+            set({ wave: nextW });
+            // cada 5 oleadas, una mejora rara de recompensa
+            if (nextW % WAVES_PER_REGION === 0) get().openDraft('region');
+            return;
+          }
+
+          // ── Siguiente oleada dentro de la región ──
+          if (s.wave < WAVES_PER_REGION - 1) {
+            const nextW = s.wave + 1;
+            world.wave = nextW;
+            world.score += 150 * nextW;
+            world.director.startWave(nextW, s.region, world);
+            set({ wave: nextW, phase: 'playing' });
+            return;
+          }
+
+          // ── Fin de la región: estrellas ──
+          const stars = 1 + (p.vitality >= p.mods.maxVitality ? 1 : 0) + (world.hitsThisRegion === 0 ? 1 : 0);
+          useProfileStore.getState().recordArcadeStars(s.region, stars);
+          world.hitsThisRegion = 0;
+          const regionStars = [...s.regionStars];
+          regionStars[s.region] = stars;
+
+          const nextR = s.region + 1;
+          if (nextR >= REGIONS.length) {
+            // Las tres regiones superadas: victoria (el jugador puede seguir en modo infinito)
+            world.score += 3000;
+            set({ runWon: true, phase: 'gameover', regionStars, lastRegionStars: stars, bestRegion: REGIONS.length, fichas: s.fichas + 5 });
+            return;
+          }
+          world.score += 1000;
+          world.region = nextR;
+          world.wave = 0;
+          world.director.startWave(0, nextR, world);
+          set({
+            wave: 0,
+            region: nextR,
+            regionStars,
+            lastRegionStars: stars,
+            rerolls: s.rerolls + 1,
+            bestRegion: Math.max(s.bestRegion, nextR),
+            fichas: s.fichas + 3,
+          });
+          // antes se ponía la fase sin repartir cartas y la partida se quedaba bloqueada
+          get().openDraft('region');
+        },
+
+        continueEndless: () => {
+          const s = get();
+          if (!s.runWon) return;
+          world.region = REGIONS.length - 1;
+          world.wave = 0;
+          world.director.startWave(0, REGIONS.length, world);
+          set({ endless: true, wave: 0 });
+          get().openDraft('region'); // recompensa al entrar en el modo infinito
+        },
 
         newRun: (seed = (Math.random() * 2 ** 31) | 0) => {
           world.reset(seed);
@@ -179,6 +230,9 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
           set({
             phase: 'playing',
             runWon: false,
+            endless: false,
+            regionStars: [],
+            lastRegionStars: 0,
             region: 0,
             wave: 0,
             level: 1,

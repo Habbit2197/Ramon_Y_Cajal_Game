@@ -42,22 +42,29 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
   const [editingName, setEditingName] = useState(!playerName);
   const [showBoard, setShowBoard] = useState(false);
 
-  const canPlay = !!playerName && !editingName;
+  const setPlayerName = useProfileStore((s) => s.setPlayerName);
+  /** Nadie se queda atascado: sin alias, se asigna uno al azar y se juega */
+  const playNow = () => {
+    if (!useProfileStore.getState().playerName) setPlayerName(randomAlias());
+    setEditingName(false);
+    onPlay();
+  };
+  const canPlay = true;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (keyboardEnabled && e.code === 'Enter' && canPlay && !(e.target instanceof HTMLInputElement)) {
         e.preventDefault();
-        onPlay();
+        playNow();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [canPlay, onPlay, keyboardEnabled]);
+  }, [canPlay, playNow, keyboardEnabled]);
 
   return (
     <div className="fixed inset-0 z-20 overflow-y-auto menu-scrim">
-      <div className="min-h-full w-full max-w-[1200px] mx-auto px-5 py-6 md:px-10 md:py-6 grid gap-8 lg:grid-cols-[minmax(0,34rem)_minmax(0,22rem)] lg:justify-between content-between">
+      <div className="min-h-full w-full max-w-[1200px] mx-auto safe-pad [--pad-x:1.25rem] [--pad-y:1.5rem] md:[--pad-x:2.5rem] grid gap-8 lg:grid-cols-[minmax(0,34rem)_minmax(0,22rem)] lg:justify-between content-between">
         {/* Columna principal */}
         <div className="flex flex-col gap-5">
           <header className="menu-enter">
@@ -151,8 +158,7 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
           <div className="flex flex-wrap items-center gap-3 menu-enter" style={{ animationDelay: '180ms' }}>
             <button
               type="button"
-              disabled={!canPlay}
-              onClick={onPlay}
+              onClick={playNow}
               data-start="true"
               className={`h-14 px-8 rounded-2xl font-semibold text-base transition-[transform,background-color] active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
                 { story: 'bg-[#e8b45a] hover:bg-[#f2c470] text-[#1a1206]', arcade: 'bg-[#5ee6ff] hover:bg-[#8ff0ff] text-[#03141a]', maze: 'bg-[#b49cff] hover:bg-[#c9b8ff] text-[#150a2e]' }[mode]
@@ -160,12 +166,12 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
             >
               {mode === 'story' ? `Jugar: ${shortLevelName(LEVELS[levelIndex].name)}` : mode === 'arcade' ? 'Jugar arcade' : 'Jugar laberinto'}
             </button>
-            {canPlay ? (
+            {playerName && !editingName ? (
               <span className="text-sm text-[#c9c2b4] max-w-[17rem] leading-snug">
                 {{ story: 'Objetivo: llena tu potencial cerebral al 100 % y cruza el portal de Cajal.', arcade: 'Objetivo: sobrevive a 5 oleadas en cada una de las 3 regiones del cerebro.', maze: 'Objetivo: recoge todas las vesículas de la red sin que te alcancen las toxinas.' }[mode]}
               </span>
             ) : (
-              <span className="text-sm text-[#a9a293]">Primero elige tu alias.</span>
+              <span className="text-sm text-[#a9a293] max-w-[17rem] leading-snug">Si no eliges alias, te daremos uno al azar.</span>
             )}
           </div>
 

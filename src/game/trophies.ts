@@ -29,6 +29,7 @@ export interface PlayerStats {
   mazeStuns: number;
   mazeBestChain: number; // toxinas neutralizadas con un mismo BDNF
   mazeBestScore: number;
+  arcadeBestEndless: number; // oleada máxima del modo infinito
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -53,6 +54,7 @@ export const EMPTY_STATS: PlayerStats = {
   mazeStuns: 0,
   mazeBestChain: 0,
   mazeBestScore: 0,
+  arcadeBestEndless: 0,
 };
 
 export type TrophyGroup = 'general' | 'story' | 'arcade' | 'maze';
@@ -65,9 +67,9 @@ export interface TrophyDef {
   how: string;
   /** Dato de neurociencia que se «descubre» al conseguirla */
   fact: string;
-  check: (s: PlayerStats, stars: Record<number, number>) => boolean;
+  check: (s: PlayerStats, stars: Record<number, number>, arcadeStars?: Record<number, number>) => boolean;
   /** Progreso 0..1 para mostrar barra en medallas acumulativas */
-  progress?: (s: PlayerStats, stars: Record<number, number>) => number;
+  progress?: (s: PlayerStats, stars: Record<number, number>, arcadeStars?: Record<number, number>) => number;
 }
 
 const ratio = (v: number, goal: number) => Math.max(0, Math.min(1, v / goal));
@@ -206,6 +208,20 @@ export const TROPHIES: TrophyDef[] = [
     check: (s) => s.arcadeBestLevel >= 10,
     progress: (s) => ratio(s.arcadeBestLevel, 10),
   },
+  {
+    id: 'regiones-perfectas', group: 'arcade', name: 'Cerebro en forma',
+    how: 'Consigue las 9 estrellas del Arcade (3 por región).',
+    fact: 'Cada región del cerebro se especializa en algo, pero todas trabajan conectadas: ninguna funciona sola.',
+    check: (_s, _st, arcadeStars) => starsTotal(arcadeStars ?? {}) >= 9,
+    progress: (_s, _st, arcadeStars) => ratio(starsTotal(arcadeStars ?? {}), 9),
+  },
+  {
+    id: 'sin-fin', group: 'arcade', name: 'Sin fin',
+    how: 'Llega a la oleada 10 del modo infinito.',
+    fact: 'Las neuronas no se cansan de transmitir: algunas pueden enviar cientos de impulsos por segundo.',
+    check: (s) => s.arcadeBestEndless >= 10,
+    progress: (s) => ratio(s.arcadeBestEndless, 10),
+  },
 
   // ── Modo Laberinto ──────────────────────────────────────────────────────
   {
@@ -243,8 +259,8 @@ export const TROPHIES: TrophyDef[] = [
 ];
 
 /** Devuelve los ids que se cumplen ahora y aún no estaban desbloqueados. */
-export function newlyUnlocked(stats: PlayerStats, stars: Record<number, number>, unlocked: Record<string, string>): string[] {
-  return TROPHIES.filter((t) => !unlocked[t.id] && t.check(stats, stars)).map((t) => t.id);
+export function newlyUnlocked(stats: PlayerStats, stars: Record<number, number>, unlocked: Record<string, string>, arcadeStars: Record<number, number> = {}): string[] {
+  return TROPHIES.filter((t) => !unlocked[t.id] && t.check(stats, stars, arcadeStars)).map((t) => t.id);
 }
 
 // ── Estrellas por nivel del Modo Historia ─────────────────────────────────

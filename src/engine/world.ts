@@ -18,6 +18,9 @@ import { feel } from './feel';
 import { onTankKilled } from '../game/enemies/tank';
 
 
+/** Duración del destello de impacto (s) */
+export const HIT_FLASH = 0.12;
+
 /** Puntos por toxina eliminada (se multiplican por región) */
 const KILL_POINTS: Record<EnemyKind, number> = { swarmer: 10, tank0: 60, tank1: 30, tank2: 15, homing: 25 };
 
@@ -47,6 +50,8 @@ export interface PlayerState {
   smokeSlowTimer: number; // Lentitud por tabaco
   shieldActive: boolean;
   shieldTimer: number;
+  /** Segundos en los que el impulso no necesita recarga (carta Impulso saltatorio) */
+  dashFreeTimer: number;
   ultCharge: number; // 0..100
   ultActiveTimer: number;
   mods: Modifiers;
@@ -164,6 +169,7 @@ export class World {
     smokeSlowTimer: 0,
     shieldActive: false,
     shieldTimer: 0,
+    dashFreeTimer: 0,
     ultCharge: 0,
     ultActiveTimer: 0,
     mods: baseModifiers(),
@@ -528,6 +534,7 @@ export class World {
 
     const dmg = rawDamage * (pool.dmgMult[poolIdx] || 1);
     pool.hp[poolIdx] -= dmg;
+    pool.flash[poolIdx] = HIT_FLASH; // destello blanco en la toxina
     feel.emit('hit');
 
     const x = m.x[mirrorIdx];
@@ -570,6 +577,8 @@ export class World {
   ultRequest = false;
   /** Impulsos realizados en la partida (para la guía y estadísticas) */
   dashes = 0;
+  /** Golpes recibidos en la región actual (para las estrellas) */
+  hitsThisRegion = 0;
 
   /** Puntuación de la partida arcade (para la clasificación) */
   score = 0;
@@ -581,6 +590,7 @@ export class World {
     this.score = 0;
     this.ultRequest = false;
     this.dashes = 0;
+    this.hitsThisRegion = 0;
     this.kills = 0;
     this.elapsed = 0;
     this.player.x = 0;
@@ -598,6 +608,7 @@ export class World {
     this.player.smokeSlowTimer = 0;
     this.player.shieldActive = false;
     this.player.shieldTimer = 0;
+    this.player.dashFreeTimer = 0;
     this.player.ultCharge = 0;
     this.player.ultActiveTimer = 0;
     this.player.mods = baseModifiers();

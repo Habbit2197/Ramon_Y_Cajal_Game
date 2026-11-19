@@ -194,7 +194,12 @@ export class Director {
 
     const regionMenu = REGION_MENU[Math.min(w.region, REGION_MENU.length - 1)] ?? REGION_MENU[0];
     const available = regionMenu.filter((opt) => opt.minWave <= w.wave && opt.cost <= this.budget);
-    if (available.length === 0) return;
+    if (available.length === 0) {
+      // Lo que queda no alcanza para ningún enemigo: la oleada ya está completa.
+      // (Antes el presupuesto se quedaba en 1 o 2 puntos y la oleada no terminaba nunca.)
+      if (regionMenu.every((opt) => opt.minWave > w.wave || opt.cost > this.budget)) this.budget = 0;
+      return;
+    }
 
     const pick = weightedPick(available, w.rng);
     const [x, z] = offscreenPoint(w);

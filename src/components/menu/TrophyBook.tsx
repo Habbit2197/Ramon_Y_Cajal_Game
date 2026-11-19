@@ -49,7 +49,7 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
   const playerName = useProfileStore((s) => s.playerName);
   const got = Object.keys(progress.trophies).length;
   const st = progress.stats;
-  const totalStars = Object.values(progress.stars).reduce((a, b) => a + b, 0);
+  const totalStars = Object.values(progress.stars).reduce((a, b) => a + b, 0) + Object.values(progress.arcadeStars ?? {}).reduce((a, b) => a + b, 0);
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="book-title" className="fixed inset-0 z-40 bg-[#0b1220]/90 backdrop-blur-md overflow-y-auto">
@@ -58,7 +58,7 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
           <div>
             <h2 id="book-title" className="font-display text-3xl md:text-4xl text-white">Cuaderno de Cajal</h2>
             <p className="mt-1 text-sm text-[#c9c2b4]">
-              {playerName ? `${playerName}: ${got} de ${TROPHIES.length} medallas y ${totalStars} de 9 estrellas.` : 'Elige un alias para empezar a coleccionar medallas.'}
+              {playerName ? `${playerName}: ${got} de ${TROPHIES.length} medallas y ${totalStars} de 18 estrellas.` : 'Elige un alias para empezar a coleccionar medallas.'}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" autoFocus className="w-10 h-10 rounded-full inline-flex items-center justify-center text-[#c9c2b4] hover:text-white hover:bg-white/8 cursor-pointer">
@@ -85,6 +85,18 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
             <p className="mt-3 text-xs text-[#a9a293] leading-relaxed">
               Una estrella por completar el nivel, otra por terminar con todos los corazones y otra por hacerlo en menos de 90 segundos.
             </p>
+            <h3 className="font-display text-lg text-white mt-5">Estrellas del Arcade</h3>
+            <ul className="mt-3 flex flex-col gap-2">
+              {['Corteza prefrontal', 'Hipocampo', 'Cerebelo'].map((r, i) => (
+                <li key={r} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-[#e9e3d6]">{r}</span>
+                  <StarRow n={progress.arcadeStars?.[i] ?? 0} />
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-[#a9a293] leading-relaxed">
+              Una estrella por superar la región, otra por terminarla con todos los corazones y otra por no recibir ningún golpe en ella.
+            </p>
           </section>
           <section className="menu-panel rounded-2xl p-5">
             <h3 className="font-display text-lg text-white">Tus números</h3>
@@ -107,7 +119,7 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
               {TROPHIES.filter((t) => t.group === g.id).map((t) => {
                 const date = progress.trophies[t.id];
-                const pr = !date && t.progress ? t.progress(st, progress.stars) : null;
+                const pr = !date && t.progress ? t.progress(st, progress.stars, progress.arcadeStars ?? {}) : null;
                 return (
                   <li key={t.id} className={`rounded-2xl p-4 flex gap-3.5 ${date ? 'menu-panel' : 'bg-white/[0.03] border border-white/5'}`}>
                     <Medal color={g.color} locked={!date} />

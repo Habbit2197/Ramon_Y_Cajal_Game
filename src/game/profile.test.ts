@@ -62,9 +62,9 @@ import { useProfileStore, aliasKey } from '../store/useProfileStore';
 import { useToastStore } from '../store/useToastStore';
 
 describe('Medallas', () => {
-  it('hay 25 medallas con ids únicos, cómo conseguirlas y un dato', () => {
-    expect(TROPHIES).toHaveLength(25);
-    expect(new Set(TROPHIES.map((t) => t.id)).size).toBe(25);
+  it('hay 27 medallas con ids únicos, cómo conseguirlas y un dato', () => {
+    expect(TROPHIES).toHaveLength(27);
+    expect(new Set(TROPHIES.map((t) => t.id)).size).toBe(27);
     for (const t of TROPHIES) { expect(t.how.length).toBeGreaterThan(5); expect(t.fact.length).toBeGreaterThan(20); }
   });
 

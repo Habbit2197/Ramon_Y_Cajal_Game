@@ -18,6 +18,7 @@ import { Leaderboard } from '../../components/menu/Leaderboard';
 import { MazeCoach } from '../../components/onboarding/Coach';
 import { isTouchDevice } from '../../components/onboarding/OnboardingModal';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { useAutoPause } from '../../engine/mobile';
 
 const KEY_DIR: Record<string, Dir> = {
   ArrowUp: 0, KeyW: 0, ArrowRight: 1, KeyD: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 3, KeyA: 3,
@@ -82,6 +83,10 @@ export function MazeMode({
     setPaused(false);
     setRun((r) => r + 1);
   }, []);
+
+  // Al cambiar de app o de pestaña, la partida se pausa
+  const autoPause = useCallback(() => setPaused(true), []);
+  useAutoPause(!isPaused && !result, autoPause);
 
   // HUD a 10 Hz: sin re-render de React en cada frame
   useEffect(() => {
@@ -184,7 +189,7 @@ export function MazeMode({
       </ErrorBoundary>
 
       {/* HUD superior */}
-      <div className="absolute inset-x-0 top-0 p-3 sm:p-5 flex items-start justify-between gap-3 pointer-events-none">
+      <div className="absolute inset-x-0 top-0 safe-pad safe-pad-sm !pb-0 flex items-start justify-between gap-3 pointer-events-none">
         <div className="pointer-events-auto rounded-2xl bg-[#0b1220]/80 backdrop-blur-md border border-[#b49cff]/25 px-4 py-2.5 flex flex-col gap-1.5 min-w-[11rem]">
           <div className="flex items-baseline justify-between gap-4">
             <span className="text-2xl font-semibold text-white [font-variant-numeric:tabular-nums]">{hud.score.toLocaleString('es-ES')}</span>
@@ -257,7 +262,7 @@ export function MazeMode({
 
       {/* Controles táctiles */}
       {touch && !result && (
-        <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between pointer-events-none">
+        <div className="absolute inset-x-0 bottom-0 safe-pad !pt-0 flex items-end justify-between pointer-events-none">
           <div className="pointer-events-auto grid grid-cols-3 gap-1.5" aria-label="Cruceta">
             {([[null, 0, null], [3, null, 1], [null, 2, null]] as (Dir | null)[][]).flat().map((d, i) =>
               d === null ? (

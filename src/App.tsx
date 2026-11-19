@@ -15,14 +15,21 @@ import { GameHud } from './components/GameHud';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainMenu } from './components/menu/MainMenu';
 import { StoryPauseModal, StoryOutcomeModal, timeBonus } from './modes/StoryModals';
-import { ArcadeMode } from './modes/ArcadeMode';
-import { MazeMode } from './modes/maze/MazeMode';
+// Cada modo se descarga al elegirlo: el menú aparece antes (el Arcade incluye el motor de física)
+const ArcadeMode = lazy(() => import('./modes/ArcadeMode').then((m) => ({ default: m.ArcadeMode })));
+const MazeMode = lazy(() => import('./modes/maze/MazeMode').then((m) => ({ default: m.MazeMode })));
+/** Precarga el modo en cuanto se selecciona en el menú, para que al pulsar «Jugar» ya esté listo */
+export const prefetchMode = (m: GameMode) => {
+  if (m === 'arcade') void import('./modes/ArcadeMode');
+  else if (m === 'maze') void import('./modes/maze/MazeMode');
+};
 import { LEVELS } from './game/rules';
 import { soundEngine } from './game/sound';
 import { useGameStore } from './store/useGameStore';
 import { useProfileStore, aliasKey, type GameMode } from './store/useProfileStore';
 import { useRunStore } from './store/useRunStore';
 import { feelSettings } from './engine/feel';
+import { useAutoPause, useWakeLock } from './engine/mobile';
 import { OnboardingModal } from './components/onboarding/OnboardingModal';
 import { StoryCoach } from './components/onboarding/Coach';
 import { TrophyBook } from './components/menu/TrophyBook';
@@ -54,6 +61,15 @@ const INITIAL_HUD: HudSnapshot = {
 
 const shortName = (n: string) => n.replace(/^Nivel \d+:\s*/, '');
 
+function ModeLoading() {
+  return (
+    <div className="fixed inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#0b1220] text-[#c9c2b4]" role="status">
+      <span className="w-10 h-10 rounded-full border-2 border-white/15 border-t-[#e8b45a] animate-spin motion-reduce:animate-none" aria-hidden />
+      Cargando el modo…
+    </div>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu');
   const [mode, setMode] = useState<GameMode>('story');
@@ -81,6 +97,11 @@ export default function App() {
   }, [screen, canvasState]);
 
   const toggleMute = useCallback(() => setMuted(soundEngine.toggleMute()), []);
+
+  // Móvil: pausa al cambiar de app y pantalla encendida mientras se juega
+  const pauseStory = useCallback(() => setStoryState((s) => (s === 'playing' ? 'paused' : s)), []);
+  useAutoPause(screen === 'story' && storyState === 'playing', pauseStory);
+  useWakeLock(screen !== 'menu');
 
   useEffect(() => {
     const apply = (s: ReturnType<typeof useRunStore.getState>['settings']) => Object.assign(feelSettings, s);
@@ -191,7 +212,7 @@ export default function App() {
       {screen === 'menu' && (
         <MainMenu
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={(m) => { setMode(m); prefetchMode(m); }}
           levelIndex={levelIndex}
           onLevelChange={setLevelIndex}
           onPlay={play}
@@ -242,6 +263,7 @@ export default function App() {
       {screen === 'story' && storyState === 'playing' && <StoryCoach hud={hud} active={coach === 'story'} onFinish={() => setCoach(null)} />}
 
       {screen === 'arcade' && (
+        <Suspense fallback={<ModeLoading />}>
         <ArcadeMode
           onExit={backToMenu}
           muted={muted}
@@ -251,9 +273,11 @@ export default function App() {
           onHelp={() => setOnboarding({ mode: 'arcade', thenStart: false })}
           helpOpen={!!onboarding}
         />
+        </Suspense>
       )}
 
       {screen === 'maze' && (
+        <Suspense fallback={<ModeLoading />}>
         <MazeMode
           onExit={backToMenu}
           muted={muted}
@@ -263,6 +287,7 @@ export default function App() {
           onHelp={() => setOnboarding({ mode: 'maze', thenStart: false })}
           helpOpen={!!onboarding}
         />
+        </Suspense>
       )}
 
       {onboarding && <OnboardingModal mode={onboarding.mode} onDone={finishOnboarding} />}

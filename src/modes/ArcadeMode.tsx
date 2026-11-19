@@ -13,11 +13,12 @@ import { useProfileStore } from '../store/useProfileStore';
 import { UPGRADES } from '../game/upgrades';
 import { RogueliteHUD } from '../components/ui/RogueliteHUD';
 import { DraftModal } from '../components/ui/DraftModal';
-import { GameOverModal, type ArcadeResult } from '../components/ui/GameOverModal';
+import { GameOverModal, VictoryModal, type ArcadeResult } from '../components/ui/GameOverModal';
 import { TouchControls } from '../components/ui/TouchControls';
 import { ArcadeCoach } from '../components/onboarding/Coach';
 import { isTouchDevice } from '../components/onboarding/OnboardingModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { useAutoPause } from '../engine/mobile';
 
 const REGION_NAMES = ['Corteza prefrontal', 'Hipocampo', 'Cerebelo'];
 const EVOLUTION_IDS = Object.entries(UPGRADES).filter(([, u]) => u.rarity === 'evolution').map(([id]) => id);
@@ -31,11 +32,14 @@ export function ArcadeMode({
   const phase = useRunStore((s) => s.phase);
   const setPhase = useRunStore((s) => s.setPhase);
   const [result, setResult] = useState<ArcadeResult | null>(null);
+  /** Tras superar las tres regiones: elegir entre guardar o seguir en modo infinito */
+  const [victory, setVictory] = useState(false);
   const [touch] = useState(isTouchDevice);
 
   const start = useCallback(() => {
     resetClock();
     setResult(null);
+    setVictory(false);
     useRunStore.getState().newRun();
   }, []);
 
@@ -69,18 +73,28 @@ export function ArcadeMode({
     };
   }, []);
 
-  // Fin de partida: calcular resultado, enviarlo y registrar estadísticas (una sola vez)
-  useEffect(() => {
-    if (phase !== 'gameover' || result) return;
+  /** Calcula el resultado, lo envía a la clasificación y registra estadísticas (una vez por partida) */
+  const finalize = useCallback(() => {
     const s = useRunStore.getState();
     const won = s.runWon;
     const region = Math.min(s.region, 2);
-    const detail = won ? 'Las tres regiones superadas' : `${REGION_NAMES[region]}, oleada ${s.wave + 1}`;
+    const detail = s.endless ? `Modo infinito, oleada ${s.wave + 1}` : won ? 'Las tres regiones superadas' : `${REGION_NAMES[region]}, oleada ${s.wave + 1}`;
     const profile = useProfileStore.getState();
     const rank = profile.submitScore('arcade', world.score, detail);
     profile.recordArcadeEnd({ won, kills: world.kills, region, wave: region === 0 ? s.wave : 5, level: s.level });
-    setResult({ won, score: world.score, kills: world.kills, detail, seconds: world.elapsed, rank });
-  }, [phase, result]);
+    setResult({ won, score: world.score, kills: world.kills, detail, seconds: world.elapsed, rank, regionStars: s.regionStars });
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'gameover' || result || victory) return;
+    const s = useRunStore.getState();
+    if (s.runWon && !s.endless) setVictory(true); // primero, elegir
+    else finalize();
+  }, [phase, result, victory, finalize]);
+
+  // Al cambiar de app o de pestaña, la partida se pausa
+  const autoPause = useCallback(() => { if (useRunStore.getState().phase === 'playing') setPhase('paused'); }, [setPhase]);
+  useAutoPause(phase === 'playing', autoPause);
 
   // Esc / P: pausa
   useEffect(() => {
@@ -138,6 +152,14 @@ export function ArcadeMode({
         </div>
       )}
 
+      {phase === 'gameover' && victory && !result && (
+        <VictoryModal
+          score={world.score}
+          regionStars={useRunStore.getState().regionStars}
+          onContinue={() => { setVictory(false); useRunStore.getState().continueEndless(); }}
+          onFinish={() => { finalize(); }}
+        />
+      )}
       {phase === 'gameover' && result && <GameOverModal result={result} onRetry={start} onExit={onExit} />}
     </div>
   );

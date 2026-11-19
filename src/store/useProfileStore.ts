@@ -29,6 +29,8 @@ export interface PlayerProgress {
   stats: PlayerStats;
   /** índice de nivel → mejores estrellas (0..3) */
   stars: Record<number, number>;
+  /** región del Arcade → mejores estrellas (0..3) */
+  arcadeStars: Record<number, number>;
   /** id de medalla → fecha ISO */
   trophies: Record<string, string>;
   onboarding: Record<GameMode, boolean>;
@@ -40,6 +42,7 @@ export const AVATAR_COUNT = 8;
 const emptyProgress = (): PlayerProgress => ({
   stats: { ...EMPTY_STATS, levelsCompleted: [] },
   stars: {},
+  arcadeStars: {},
   trophies: {},
   onboarding: { story: false, arcade: false, maze: false },
 });
@@ -64,6 +67,7 @@ export interface ArcadeCheckpoint {
   evolutions?: number;
   perfectDashes?: number; // incrementos
   tankSplits?: number; // incrementos
+  endlessWave?: number;
 }
 
 interface ProfileState {
@@ -80,6 +84,7 @@ interface ProfileState {
   clearLeaderboard: () => void;
   recordStory: (r: StoryResult) => { stars: number };
   recordArcade: (c: ArcadeCheckpoint) => void;
+  recordArcadeStars: (region: number, stars: number) => void;
   recordArcadeEnd: (r: { won: boolean; kills: number; region: number; wave: number; level: number }) => void;
   /** Avances durante la partida del Laberinto (los incrementos se suman) */
   recordMaze: (c: { level?: number; stuns?: number; bestChain?: number }) => void;
@@ -128,11 +133,12 @@ export const useProfileStore = create<ProfileState>()(
         const p: PlayerProgress = {
           stats: { ...EMPTY_STATS, ...prev.stats, levelsCompleted: [...(prev.stats.levelsCompleted ?? [])] },
           stars: { ...prev.stars },
+          arcadeStars: { ...(prev.arcadeStars ?? {}) },
           trophies: { ...prev.trophies },
           onboarding: { ...prev.onboarding },
         };
         fn(p);
-        const fresh = newlyUnlocked(p.stats, p.stars, p.trophies);
+        const fresh = newlyUnlocked(p.stats, p.stars, p.trophies, p.arcadeStars);
         const now = new Date().toISOString();
         for (const id of fresh) {
           p.trophies[id] = now;
@@ -204,7 +210,11 @@ export const useProfileStore = create<ProfileState>()(
             if (c.evolutions !== undefined) st.evolutions = Math.max(st.evolutions, c.evolutions);
             if (c.perfectDashes) st.perfectDashes += c.perfectDashes;
             if (c.tankSplits) st.tankSplits += c.tankSplits;
+            if (c.endlessWave !== undefined) st.arcadeBestEndless = Math.max(st.arcadeBestEndless, c.endlessWave);
           }),
+
+        recordArcadeStars: (region, stars) =>
+          update((p) => { p.arcadeStars[region] = Math.max(p.arcadeStars[region] ?? 0, stars); }),
 
         recordArcadeEnd: (r) =>
           update((p) => {
@@ -238,7 +248,7 @@ export const useProfileStore = create<ProfileState>()(
     },
     {
       name: 'cajal-profile',
-      version: 3,
+      version: 4,
       storage: safeStorage,
       partialize: (s) => ({
         playerName: s.playerName,
@@ -259,6 +269,7 @@ export const useProfileStore = create<ProfileState>()(
         for (const p of Object.values(s.progress ?? {})) {
           p.stats = { ...EMPTY_STATS, ...p.stats, fastestWin: p.stats?.fastestWin ?? 1e9, bestRank: p.stats?.bestRank ?? 1e9 };
           p.onboarding = Object.assign({ story: false, arcade: false, maze: false }, p.onboarding);
+          p.arcadeStars = p.arcadeStars ?? {}; // v4
         }
         return s as ProfileState;
       },

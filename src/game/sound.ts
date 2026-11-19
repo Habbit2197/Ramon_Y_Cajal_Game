@@ -6,6 +6,33 @@ class SoundEngine {
   private ctx: AudioContext | null = null;
   public muted = false;
 
+  /** Desbloqueo para iPhone/iPad: crear y reanudar el contexto dentro de un gesto y sonar un silencio. */
+  public unlock(): void {
+    if (typeof window === 'undefined') return;
+    const wasMuted = this.muted;
+    this.muted = false;
+    const ctx = this.getContext();
+    this.muted = wasMuted;
+    if (!ctx) return;
+    try {
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      /* algunos navegadores antiguos no lo permiten: se reintentará en el siguiente sonido */
+    }
+  }
+
+  public suspend(): void {
+    this.ctx?.suspend().catch(() => {});
+  }
+
+  public resume(): void {
+    if (!this.muted) this.ctx?.resume().catch(() => {});
+  }
+
   private getContext(): AudioContext | null {
     if (this.muted || typeof window === 'undefined') return null;
     if (!this.ctx) {
