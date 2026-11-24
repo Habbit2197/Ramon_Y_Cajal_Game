@@ -7,7 +7,7 @@ import { activeParams } from '../../game/difficulty';
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Droplet, Apple, Nut, BookOpen, Cloud, Candy, Wine, Heart, Star, Target, Zap, Sparkles, Crosshair, Waves, Trophy, Gamepad2, Moon, Network,
+  Droplet, Apple, Nut, BookOpen, Cloud, Candy, Wine, Cigarette, Beer, CupSoda, Heart, Star, Target, Zap, Sparkles, Crosshair, Waves, Trophy, Gamepad2, Moon, Network,
 } from 'lucide-react';
 import { MAZE_RULES } from '../../game/maze/sim';
 import { ITEM_CATALOG } from '../../game/rules';
@@ -83,9 +83,9 @@ function storySteps(touch: boolean): Step[] {
       body: (
         <div className="flex flex-col gap-4">
           <ul className="flex flex-col gap-3">
-            <Row icon={<Cloud className="w-5 h-5" />} color="#b8b2c8" title={`Humo de tabaco  ${delta(c.tobacco_smoke.brainDelta)}`}>Te persigue. Si te alcanza, vas más lento.</Row>
-            <Row icon={<Candy className="w-5 h-5" />} color="#ff9f5a" title={`Ultraprocesados  ${delta(c.junk_food.brainDelta)}`}>Embiste en línea recta. Te deja cansado y lento.</Row>
-            <Row icon={<Wine className="w-5 h-5" />} color="#ff6f6f" title={`Alcohol  ${delta(c.alcohol_toxin.brainDelta)}`}>Da vueltas por el camino. Te marea: te cuesta frenar y girar.</Row>
+            <Row icon={<Cigarette className="w-5 h-5" />} color="#b8b2c8" title={`Cigarrillo  ${delta(c.tobacco_smoke.brainDelta)}`}>Te persigue. Si te alcanza, vas más lento.</Row>
+            <Row icon={<CupSoda className="w-5 h-5" />} color="#ff6b6b" title={`Refresco azucarado  ${delta(c.junk_food.brainDelta)}`}>Embiste en línea recta. Te deja cansado y lento.</Row>
+            <Row icon={<Beer className="w-5 h-5" />} color="#e8b45a" title={`Cerveza (alcohol)  ${delta(c.alcohol_toxin.brainDelta)}`}>Da vueltas por el camino. Te marea: te cuesta frenar y girar.</Row>
           </ul>
           <p className="text-sm text-[#c9c2b4]">
             El anillo rojo en el suelo avisa de que una toxina va a moverse. Cada golpe te quita un corazón y, justo después, tienes un momento de invulnerabilidad.
@@ -199,9 +199,9 @@ function arcadeSteps(touch: boolean): Step[] {
       title: 'Conoce a las toxinas',
       body: (
         <ul className="flex flex-col gap-3">
-          <Row icon={<Cloud className="w-5 h-5" />} color="#c9a8ff" title="Nicotina">Llegan en enjambre. Son pequeñas y frágiles, pero si te tocan vas más lento.</Row>
-          <Row icon={<Wine className="w-5 h-5" />} color="#e8b45a" title="Etanol">Grande y lento. Al eliminarlo se divide en dos más pequeños. Te marea: cuesta frenar.</Row>
-          <Row icon={<Candy className="w-5 h-5" />} color="#ff9f5a" title="Azúcar refinado">
+          <Row icon={<Cigarette className="w-5 h-5" />} color="#e8dcc8" title="Cigarrillos (nicotina)">Llegan en enjambre. Son pequeños y frágiles, pero si te tocan vas más lento.</Row>
+          <Row icon={<Beer className="w-5 h-5" />} color="#e8b45a" title="Botellines (alcohol)">Grande y lento. Al eliminarlo se divide en dos más pequeños. Te marea: cuesta frenar.</Row>
+          <Row icon={<CupSoda className="w-5 h-5" />} color="#ff6b6b" title="Latas de refresco (azúcar)">
             Te persigue muy rápido unos segundos y luego se agota y recibe el doble de daño. Si te toca, te cansas y disparas más despacio un rato.
           </Row>
         </ul>

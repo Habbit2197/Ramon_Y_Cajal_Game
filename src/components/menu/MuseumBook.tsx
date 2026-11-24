@@ -10,15 +10,15 @@ import { NeuronArt } from './NeuronArt';
 import type { CellType } from '../../game/lab/neuronShapes';
 import { NeuronGlyph } from './NeuronGlyph';
 
-const ROOM_ORDER: MuseumRoom[] = ['cajal', 'neurona', 'tipos', 'quimica', 'cerebro'];
-const ROOM_COLOR: Record<MuseumRoom, string> = { cajal: '#e8b45a', neurona: '#ffb86b', tipos: '#7fe0a8', quimica: '#ff8fb1', cerebro: '#7fb8ff' };
+const ROOM_ORDER: MuseumRoom[] = ['cajal', 'escuela', 'neurona', 'tipos', 'quimica', 'regiones', 'cerebro'];
+const ROOM_COLOR: Record<MuseumRoom, string> = { cajal: '#e8b45a', escuela: '#d9c08a', neurona: '#ffb86b', tipos: '#7fe0a8', quimica: '#ff8fb1', regiones: '#b49cff', cerebro: '#7fb8ff' };
 const CELL_CARDS: Record<string, CellType> = { piramidal: 'piramidal', purkinje: 'purkinje', granulo: 'granulo', estrellada: 'estrellada', astrocito: 'astrocito', golgi: 'piramidal' };
 
 function CardArt({ card, color }: { card: MuseumCard; color: string }) {
   const cell = CELL_CARDS[card.id];
   if (cell) return <NeuronArt type={cell} seed={card.id.length * 31} size={72} ink="#1b130a" />;
   const cls = 'w-8 h-8';
-  const Icon = card.room === 'cajal' ? User : card.room === 'quimica' ? FlaskConical : card.room === 'cerebro' ? Brain : null;
+  const Icon = card.room === 'cajal' || card.room === 'escuela' ? User : card.room === 'quimica' ? FlaskConical : card.room === 'cerebro' || card.room === 'regiones' ? Brain : null;
   if (Icon) return <Icon className={cls} style={{ color }} aria-hidden />;
   return <NeuronGlyph color={color} size={46} />;
 }

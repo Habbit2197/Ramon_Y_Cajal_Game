@@ -5,7 +5,7 @@
  * los niños sepan dónde buscarla. Los textos son breves, en lenguaje claro y comprobados.
  */
 
-export type MuseumRoom = 'cajal' | 'neurona' | 'tipos' | 'quimica' | 'cerebro';
+export type MuseumRoom = 'cajal' | 'escuela' | 'neurona' | 'tipos' | 'quimica' | 'regiones' | 'cerebro';
 
 export interface MuseumCard {
   id: string;
@@ -18,6 +18,8 @@ export interface MuseumCard {
 
 export const ROOMS: Record<MuseumRoom, { label: string; blurb: string }> = {
   cajal: { label: 'La vida de Cajal', blurb: 'Del pueblo navarro al Premio Nobel.' },
+  escuela: { label: 'La escuela de Cajal', blurb: 'Sus discípulos y los científicos de su época.' },
+  regiones: { label: 'Partes del cerebro', blurb: 'Cada zona tiene su trabajo, y todas colaboran.' },
   neurona: { label: 'Partes de la neurona', blurb: 'Cómo es por dentro la célula que piensa.' },
   tipos: { label: 'Tipos de neuronas', blurb: 'Las que Cajal dibujó con su microscopio.' },
   quimica: { label: 'Mensajeros químicos', blurb: 'Lo que cruza la sinapsis.' },
@@ -45,6 +47,20 @@ export const MUSEUM: MuseumCard[] = [
     text: 'Cajal llamaba a las neuronas «mariposas misteriosas del alma». Así de bonitas le parecían cuando las veía teñidas en su microscopio.' },
   { id: 'cajal-foto', room: 'cajal', title: 'Fotógrafo pionero', hint: Q,
     text: 'Además de científico, Cajal fue un gran aficionado a la fotografía. Experimentó con la fotografía en color y escribió un libro sobre cómo hacerla.' },
+
+  // ── La escuela de Cajal ──
+  { id: 'golgi-persona', room: 'escuela', title: 'Camillo Golgi', hint: Q,
+    text: 'Médico italiano que en 1873 inventó la «reacción negra», la tinción que Cajal usó y mejoró. Compartieron el Premio Nobel de 1906.' },
+  { id: 'sherrington', room: 'escuela', title: 'Charles Sherrington', hint: Q,
+    text: 'Fisiólogo británico que en 1897 propuso la palabra «sinapsis» para el punto donde una neurona pasa el mensaje a otra.' },
+  { id: 'rio-hortega', room: 'escuela', title: 'Pío del Río Hortega', hint: Q,
+    text: 'Discípulo de Cajal. En 1919 describió la microglía, las células que limpian y defienden el cerebro.' },
+  { id: 'lorente-de-no', room: 'escuela', title: 'Rafael Lorente de Nó', hint: Q,
+    text: 'Uno de los discípulos más jóvenes de Cajal. Estudió cómo se conectan las neuronas de la corteza formando circuitos.' },
+  { id: 'fernando-de-castro', room: 'escuela', title: 'Fernando de Castro', hint: Q,
+    text: 'Discípulo de Cajal que descubrió unos sensores en el cuello que vigilan cuánto oxígeno lleva la sangre.' },
+  { id: 'instituto-cajal', room: 'escuela', title: 'El Instituto Cajal', hint: Q,
+    text: 'Centro de investigación de Madrid que lleva su nombre. Allí se guardan muchos de sus dibujos, preparaciones y microscopios.' },
 
   // ── Partes de la neurona ──
   { id: 'dendritas', room: 'neurona', title: 'Dendritas', hint: BUILD,
@@ -89,6 +105,22 @@ export const MUSEUM: MuseumCard[] = [
     text: 'Es el freno del cerebro: calma a las neuronas para que no se disparen de más. Sin frenos, el cerebro no podría funcionar bien.' },
   { id: 'umbral', room: 'quimica', title: 'El umbral', hint: RHYTHM,
     text: 'Una neurona solo dispara si recibe suficientes mensajes a la vez. Si no llega al umbral, no pasa nada: es todo o nada.' },
+
+  // ── Partes del cerebro ──
+  { id: 'hemisferios', room: 'regiones', title: 'Dos hemisferios', hint: Q,
+    text: 'El cerebro tiene dos mitades, los hemisferios, unidas por un gran puente de axones llamado cuerpo calloso.' },
+  { id: 'prefrontal', room: 'regiones', title: 'Corteza prefrontal', hint: Q,
+    text: 'Está justo detrás de la frente. Te ayuda a planificar, a concentrarte y a frenar los impulsos. Es la última zona en madurar.' },
+  { id: 'hipocampo', room: 'regiones', title: 'Hipocampo', hint: Q,
+    text: 'Tiene forma de caballito de mar y es clave para guardar recuerdos nuevos y orientarte en el espacio.' },
+  { id: 'amigdala', room: 'regiones', title: 'Amígdala', hint: Q,
+    text: 'Tiene forma de almendra y participa en las emociones, sobre todo en el miedo: te avisa de los peligros.' },
+  { id: 'cerebelo', room: 'regiones', title: 'Cerebelo', hint: Q,
+    text: 'Está en la parte de atrás y abajo. Coordina los movimientos y el equilibrio: gracias a él puedes ir en bici.' },
+  { id: 'tronco', room: 'regiones', title: 'Tronco del encéfalo', hint: Q,
+    text: 'Une el cerebro con la médula espinal y controla cosas automáticas como respirar o el latido del corazón.' },
+  { id: 'medula', room: 'regiones', title: 'Médula espinal', hint: Q,
+    text: 'Es la gran autopista de nervios que baja por dentro de la columna y lleva mensajes entre el cerebro y el cuerpo.' },
 
   // ── Cerebro sano ──
   { id: 'ejercicio', room: 'cerebro', title: 'Muévete', hint: Q,

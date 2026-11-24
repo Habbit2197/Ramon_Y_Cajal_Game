@@ -1,4 +1,4 @@
-# Clasificación compartida (Cloudflare Pages Functions + D1)
+# Clasificación compartida y modo aula (Cloudflare Pages Functions + D1)
 
 El juego es estático. La única parte con servidor es la clasificación de todos: una función pequeña en el **mismo dominio** que el archivo. Si la función no está publicada, el juego sigue funcionando y usa solo la clasificación del dispositivo.
 
@@ -33,6 +33,26 @@ El juego es estático. La única parte con servidor es la clasificación de todo
 5. Copiar ese archivo al repositorio del archivo como `functions/api/juegos/cajal-sinapsis/leaderboard.js`.
 
 La ruta que usa el juego es `/api/juegos/cajal-sinapsis/leaderboard`. Para usar otra, compila el juego con `VITE_LEADERBOARD_API=/otra/ruta npm run build`. Para apagar la clasificación compartida, compílalo con `VITE_LEADERBOARD_API=off`.
+
+## Modo aula
+
+Lo usa la misma base de datos: las tablas `classes` y `members` ya están en `server/schema.sql`. `npm run build:server` genera también `server/dist/aula.js`. Cópialo como `functions/api/juegos/cajal-sinapsis/aula.js` en el repositorio del archivo.
+
+Cómo funciona:
+
+1. El profe pulsa «Aula», luego «Soy profe», y crea una clase con un nombre corto («5.º B»). Recibe dos cosas:
+   - un **código** de 6 caracteres para los alumnos;
+   - una **clave de profe** secreta. El servidor solo guarda su resumen SHA-256.
+2. Cada alumno pulsa «Aula», luego «Soy alumno», y escribe el código. Se une con su alias del juego y su dispositivo recibe un token propio (del token también se guarda solo el resumen).
+3. Cada vez que el alumno juega, su dispositivo envía un resumen **solo de números del juego**: medallas, estrellas, fichas del Museo, preguntas acertadas, partidas, desafíos, mejores puntuaciones y dificultad.
+4. Con el código y la clave, el profe ve una tabla con todos los alumnos, la descarga en CSV y puede quitar alumnos o borrar la clase.
+
+Límites:
+- Máximo 60 alumnos por clase y 5 clases nuevas al día por conexión.
+- Los alias pasan el mismo filtro que la clasificación.
+- Las clases caducan a los 365 días y se borran solas.
+
+Para apagarlo, compila el juego con `VITE_CLASSROOM_API=off`.
 
 ## Moderar
 

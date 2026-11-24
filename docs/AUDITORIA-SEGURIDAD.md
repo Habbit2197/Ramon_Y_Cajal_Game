@@ -8,13 +8,14 @@
 
 | Punto | Resultado |
 |---|---|
-| Peticiones de red al jugar | Solo a **la misma dirección del sitio**: `GET` y `POST` a `/api/juegos/cajal-sinapsis/leaderboard`, en `src/net/onlineBoard.ts`. No hay más `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` ni `sendBeacon`. Se envía sin cookies (`credentials: 'omit'`). |
+| Peticiones de red al jugar | Solo a **la misma dirección del sitio**: `/api/juegos/cajal-sinapsis/leaderboard` (`src/net/onlineBoard.ts`) y, si se usa el modo aula, `/api/juegos/cajal-sinapsis/aula` (`src/net/classroom.ts`). No hay más `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` ni `sendBeacon`. Se envía sin cookies (`credentials: 'omit'`). |
 | Servicios externos / CDNs | **Ninguno.** Fuentes autoalojadas, sin analítica, sin anuncios, sin cargadores remotos. |
 | Variables de entorno | `import.meta.env.PROD`, `BASE_URL`, `MODE` y la opcional `VITE_LEADERBOARD_API`: solo una ruta, no es secreta. Ningún `.env` en el repositorio. |
 | Claves, tokens, contraseñas | **Ninguno** en el juego ni en el historial. El servidor usa dos secretos (`SALT`, `ADMIN_TOKEN`) que se configuran en Cloudflare, nunca en el código. |
 | Datos que salen del dispositivo | Solo si se publica la función: alias filtrado, color de avatar, puntos, una línea de detalle, la dificultad y el día del desafío. Se puede desactivar en Ajustes («Publicar en la clasificación de todos»). |
 | Datos en el servidor | Sin IP, sin cookies, sin identificadores. Límite de envíos con un resumen SHA-256 de sal + IP + fecha, que se borra al cabo de una hora. Ver `server/README.md`. |
 | Datos en el navegador | `localStorage`: `cajal-profile` (alias, progreso, medallas, fichas del Museo, ajustes, clasificación local), `cajal-meta` (ajustes y cartas del Arcade), `cajal-pending-scores` (puntuaciones esperando conexión, máximo 20) y la prueba temporal `__cajal_probe__`. |
+| Modo aula | Opcional. El profe tiene una clave secreta (en el servidor solo se guarda su resumen SHA-256). El alumno comparte con su clase su alias y números del juego, nada más. Las clases caducan en un año. Ver `server/README.md`. |
 | Alias | Entre 2 y 16 caracteres; sin emails, teléfonos, webs ni palabras malsonantes (también disfrazadas con números). El filtro se aplica en el juego y otra vez en el servidor. Moderación con borrado y bloqueo. |
 | Dependencias | `npm audit --omit=dev`: 0 vulnerabilidades. Un único lockfile (`package-lock.json`). Eliminado `@types/express`, que no se usaba. |
 | Service worker | Acotado a `/juegos/cajal-sinapsis/`. No intercepta la API (está fuera de su ruta), ni ninguna otra parte del sitio. Solo usa cachés con el prefijo `cajal-sinapsis-`. |

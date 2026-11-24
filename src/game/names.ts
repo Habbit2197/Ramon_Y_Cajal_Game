@@ -32,6 +32,12 @@ export function normalizeForFilter(s: string): string {
     .replace(/[^a-zñ]/g, '');
 }
 
+/** ¿Contiene alguna palabra bloqueada (también disfrazada)? */
+export function containsBlocked(value: string): boolean {
+  const n = normalizeForFilter(value);
+  return BLOCKED.some((w) => n.includes(w));
+}
+
 export type NameCheck = { ok: true; value: string } | { ok: false; reason: string };
 
 export function checkPlayerName(raw: string): NameCheck {

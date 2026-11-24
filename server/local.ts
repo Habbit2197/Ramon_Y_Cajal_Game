@@ -12,10 +12,12 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, extname, normalize } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { onRequest, type D1Like, type D1Stmt } from './leaderboard';
+import { onRequest as onAula } from './aula';
 
 const PORT = Number(process.env.PORT ?? 4173);
 const BASE = process.env.BASE_PATH ?? '/juegos/cajal-sinapsis/';
 const API = '/api/juegos/cajal-sinapsis/leaderboard';
+const AULA = '/api/juegos/cajal-sinapsis/aula';
 const DIST = join(import.meta.dirname, '..', 'dist');
 
 const db = new DatabaseSync(':memory:');
@@ -43,9 +45,10 @@ const TYPES: Record<string, string> = {
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
-  if (url.pathname === API) {
+  if (url.pathname === API || url.pathname === AULA) {
     const body = req.method === 'POST' ? await new Promise<string>((ok) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => ok(b)); }) : undefined;
-    const r = await onRequest({
+    const handler = url.pathname === AULA ? onAula : onRequest;
+    const r = await handler({
       env: { DB, SALT: 'local', ADMIN_TOKEN: process.env.ADMIN_TOKEN },
       request: new Request(url, { method: req.method, headers: { ...(req.headers as Record<string, string>), 'CF-Connecting-IP': req.socket.remoteAddress ?? '' }, body }),
     });
@@ -68,4 +71,4 @@ createServer(async (req, res) => {
     return;
   }
   res.writeHead(404).end('No encontrado');
-}).listen(PORT, () => console.log(`Juego: http://localhost:${PORT}${BASE}\nAPI:   http://localhost:${PORT}${API}`));
+}).listen(PORT, () => console.log(`Juego: http://localhost:${PORT}${BASE}\nAPI:   http://localhost:${PORT}${API}\nAula:  http://localhost:${PORT}${AULA}`));
