@@ -1,3 +1,4 @@
+import { buildCigarette, buildBeerBottle, buildSodaCan, buildWaterBottle, buildApple, buildWalnuts, buildBook } from './3d/realisticProps';
 import { activeParams } from '../game/difficulty';
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
@@ -631,108 +632,11 @@ function buildHealthyPickupGroup(subType: ItemSubType): THREE.Group {
   baseRing.position.y = 0.08;
   group.add(baseRing);
 
-  if (subType === 'water') {
-    const bottleMat = new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0284c7,
-      emissiveIntensity: 0.45,
-      roughness: 0.08,
-      metalness: 0.15,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.05,
-      ior: 1.33,
-    });
-    const capMat = new THREE.MeshPhysicalMaterial({
-      color: 0xf8fafc,
-      roughness: 0.35,
-      metalness: 0.1,
-      clearcoat: 0.6,
-    });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.72, 14), bottleMat);
-    body.position.y = 0.65;
-    group.add(body);
-
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.22, 0.22, 12), bottleMat);
-    neck.position.y = 1.1;
-    group.add(neck);
-
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.12, 12), capMat);
-    cap.position.y = 1.25;
-    group.add(cap);
-  } else if (subType === 'apple') {
-    const appleMat = new THREE.MeshPhysicalMaterial({
-      color: 0xef4444,
-      emissive: 0x991b1b,
-      emissiveIntensity: 0.3,
-      roughness: 0.18,
-      metalness: 0.05,
-      clearcoat: 0.92,
-      clearcoatRoughness: 0.1,
-    });
-    const leafMat = new THREE.MeshPhysicalMaterial({
-      color: 0x22c55e,
-      roughness: 0.4,
-      metalness: 0.1,
-      clearcoat: 0.5,
-    });
-    const apple = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 14), appleMat);
-    apple.scale.set(1.05, 0.92, 1.05);
-    apple.position.y = 0.7;
-    group.add(apple);
-
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.04, 0.22, 8),
-      new THREE.MeshPhysicalMaterial({ color: 0x5c4033, roughness: 0.85 })
-    );
-    stem.position.y = 1.08;
-    group.add(stem);
-
-    const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.12), leafMat);
-    leaf.position.set(0.12, 1.1, 0);
-    leaf.rotation.z = 0.35;
-    group.add(leaf);
-  } else if (subType === 'walnut') {
-    const nutMat = new THREE.MeshPhysicalMaterial({
-      color: 0xd97706,
-      emissive: 0x92400e,
-      emissiveIntensity: 0.35,
-      roughness: 0.52,
-      metalness: 0.15,
-      clearcoat: 0.35,
-    });
-    const leftLobe = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), nutMat);
-    leftLobe.scale.set(0.85, 1.05, 1.2);
-    leftLobe.position.set(-0.14, 0.72, 0);
-    group.add(leftLobe);
-
-    const rightLobe = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), nutMat);
-    rightLobe.scale.set(0.85, 1.05, 1.2);
-    rightLobe.position.set(0.14, 0.72, 0);
-    group.add(rightLobe);
-  } else {
-    // science_book (Tratado de Histología)
-    const coverMat = new THREE.MeshPhysicalMaterial({
-      color: 0xffd166,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 0.85,
-      roughness: 0.22,
-      metalness: 0.65,
-      clearcoat: 0.9,
-    });
-    const pagesMat = new THREE.MeshPhysicalMaterial({
-      color: 0xfef3c7,
-      roughness: 0.75,
-    });
-    const bookCover = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.14, 0.78), coverMat);
-    bookCover.position.y = 0.75;
-    bookCover.rotation.x = 0.45;
-    bookCover.rotation.y = 0.3;
-    const pages = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.1, 0.72), pagesMat);
-    pages.position.x = 0.03;
-    bookCover.add(pages);
-    group.add(bookCover);
-  }
-
+  // Objetos con aspecto real (realisticProps.ts)
+  const prop =
+    subType === 'water' ? buildWaterBottle() : subType === 'apple' ? buildApple() : subType === 'walnut' ? buildWalnuts() : buildBook();
+  group.add(prop.object);
+  group.userData.tick = prop.tick;
   return group;
 }
 
@@ -760,99 +664,10 @@ function buildHazardGroup(subType: ItemSubType): {
   telegraphRing.position.y = 0.03;
   group.add(telegraphRing);
 
-  if (subType === 'tobacco_smoke') {
-    const cigBody = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.11, 0.11, 0.85, 12),
-      new THREE.MeshPhysicalMaterial({ color: 0xe5e7eb, roughness: 0.75 })
-    );
-    cigBody.position.set(0, 0.55, 0);
-    cigBody.rotation.z = 0.45;
-    group.add(cigBody);
-
-    const ember = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 10, 10),
-      new THREE.MeshPhysicalMaterial({
-        color: 0xff4500,
-        emissive: 0xff2200,
-        emissiveIntensity: 1.5,
-        roughness: 0.35,
-      })
-    );
-    ember.position.set(-0.2, 0.92, 0);
-    group.add(ember);
-
-    const smokeMat = new THREE.MeshPhysicalMaterial({
-      color: 0x4b5563,
-      roughness: 0.88,
-      metalness: 0.05,
-    });
-    const offsets = [
-      [0, 1.15, 0, 0.42],
-      [0.28, 1.32, 0.18, 0.34],
-      [-0.25, 1.28, -0.2, 0.32],
-    ];
-    offsets.forEach(([ox, oy, oz, r]) => {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), smokeMat);
-      puff.position.set(ox, oy, oz);
-      group.add(puff);
-    });
-  } else if (subType === 'junk_food') {
-    const canMat = new THREE.MeshPhysicalMaterial({
-      color: 0xdc2626,
-      roughness: 0.2,
-      metalness: 0.72,
-      clearcoat: 0.85,
-    });
-    const lidMat = new THREE.MeshPhysicalMaterial({
-      color: 0xd1d5db,
-      roughness: 0.18,
-      metalness: 0.92,
-      clearcoat: 0.8,
-    });
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.95, 16), canMat);
-    can.position.y = 0.65;
-    group.add(can);
-
-    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.42, 0.08, 16), lidMat);
-    lid.position.y = 1.15;
-    group.add(lid);
-
-    const sugarRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.56, 0.08, 8, 20),
-      new THREE.MeshPhysicalMaterial({ color: 0xfbbf24, roughness: 0.45, clearcoat: 0.6 })
-    );
-    sugarRing.rotation.x = Math.PI / 2;
-    sugarRing.position.y = 0.55;
-    group.add(sugarRing);
-  } else {
-    const bottleMat = new THREE.MeshPhysicalMaterial({
-      color: 0x7e22ce,
-      emissive: 0x581c87,
-      emissiveIntensity: 0.6,
-      roughness: 0.12,
-      metalness: 0.4,
-      clearcoat: 0.95,
-    });
-    const flask = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.45, 0.85, 16), bottleMat);
-    flask.position.y = 0.58;
-    group.add(flask);
-
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.38, 12), bottleMat);
-    neck.position.y = 1.15;
-    group.add(neck);
-
-    const toxinRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.62, 0.06, 8, 24),
-      new THREE.MeshPhysicalMaterial({
-        color: 0xc084fc,
-        emissive: 0x9333ea,
-        emissiveIntensity: 0.9,
-      })
-    );
-    toxinRing.rotation.x = 1.2;
-    toxinRing.position.y = 0.85;
-    group.add(toxinRing);
-  }
+  // Toxinas con aspecto real: cigarrillo encendido, lata de refresco de cola y botellín de cerveza
+  const prop = subType === 'tobacco_smoke' ? buildCigarette() : subType === 'junk_food' ? buildSodaCan() : buildBeerBottle();
+  group.add(prop.object);
+  group.userData.tick = prop.tick;
 
   return { group, telegraphRing, telegraphMat };
 }
@@ -1592,6 +1407,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
               continue;
             }
             item.group.rotation.y += dt * 1.6;
+            item.group.userData.tick?.(elapsed, dt);
             item.group.position.y = Math.sin(elapsed * 3.0 + item.bobOffset) * 0.12;
 
             if (isCircleCollision(playerState.x, playerState.z, 0.85, item.baseX, item.baseZ, 0.75)) {
@@ -1707,7 +1523,8 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
             haz.x = Math.max(-5.4, Math.min(5.4, haz.x));
             haz.group.position.set(haz.x, 0, haz.z);
-            haz.group.rotation.y += dt * 2.0;
+            haz.group.rotation.y += dt * 0.9; // giro lento: se reconoce mejor el objeto
+            haz.group.userData.tick?.(elapsed, dt);
 
             if (isCircleCollision(playerState.x, playerState.z, 0.78, haz.x, haz.z, 0.75)) {
               const { nextState, applied } = applyItemCollision(playerState, { ...haz.spec, brainDelta: Math.round(haz.spec.brainDelta * storyDiff.hazardDamage) });
