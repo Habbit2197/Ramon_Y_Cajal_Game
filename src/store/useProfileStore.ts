@@ -9,10 +9,21 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { checkPlayerName } from '../game/names';
 import { EMPTY_STATS, TROPHIES, newlyUnlocked, starsForWin, type PlayerStats } from '../game/trophies';
+import { activeDifficulty, activeParams, isDifficulty, setActiveDifficulty, type Difficulty, type DailyModifier } from '../game/difficulty';
+import { dailyStreak, PLAY_IDS, type PlayId } from '../game/daily';
+import { MUSEUM_BY_ID } from '../game/museum';
+import { QUIZ_BY_ID } from '../game/quiz';
+import { submitOnline } from '../net/onlineBoard';
 import { useToastStore } from './useToastStore';
 
+/** Modos principales (tienen onboarding y guía en partida) */
 export type GameMode = 'story' | 'arcade' | 'maze';
 export const GAME_MODES: GameMode[] = ['story', 'arcade', 'maze'];
+/** Minijuegos del Laboratorio de Cajal */
+export type LabGame = 'micro' | 'build' | 'rhythm';
+export const LAB_GAMES: LabGame[] = ['micro', 'build', 'rhythm'];
+/** Todo lo que tiene clasificación propia */
+export type { PlayId };
 
 export interface ScoreEntry {
   id: string;
@@ -23,6 +34,10 @@ export interface ScoreEntry {
   detail: string;
   /** ISO 8601 */
   date: string;
+  /** Dificultad con la que se jugó (las entradas antiguas no la tienen: Científico) */
+  difficulty?: Difficulty;
+  /** Modificador del Desafío Diario, si la partida era el desafío */
+  modifier?: DailyModifier;
 }
 
 export interface PlayerProgress {
@@ -34,6 +49,16 @@ export interface PlayerProgress {
   /** id de medalla → fecha ISO */
   trophies: Record<string, string>;
   onboarding: Record<GameMode, boolean>;
+  /** Dificultad elegida por este alias */
+  difficulty: Difficulty;
+  /** Fichas del Museo descubiertas: id → fecha ISO */
+  discoveries: Record<string, string>;
+  /** Preguntas de Cajal ya acertadas */
+  quizAnswered: string[];
+  /** Desafío Diario: mejor puntuación por día y días completados */
+  daily: { best: Record<string, number>; completed: string[] };
+  /** Mejor puntuación en cada minijuego */
+  labBest: Partial<Record<LabGame, number>>;
 }
 
 export const LEADERBOARD_SIZE = 20;
@@ -45,7 +70,33 @@ const emptyProgress = (): PlayerProgress => ({
   arcadeStars: {},
   trophies: {},
   onboarding: { story: false, arcade: false, maze: false },
+  difficulty: 'cientifico',
+  discoveries: {},
+  quizAnswered: [],
+  daily: { best: {}, completed: [] },
+  labBest: {},
 });
+
+/** Copia profunda del progreso para modificarlo sin tocar el estado anterior */
+function cloneProgress(prev: PlayerProgress): PlayerProgress {
+  const base = emptyProgress();
+  return {
+    stats: { ...EMPTY_STATS, ...prev.stats, levelsCompleted: [...(prev.stats?.levelsCompleted ?? [])] },
+    stars: { ...prev.stars },
+    arcadeStars: { ...(prev.arcadeStars ?? {}) },
+    trophies: { ...prev.trophies },
+    onboarding: { ...base.onboarding, ...prev.onboarding },
+    difficulty: isDifficulty(prev.difficulty) ? prev.difficulty : 'cientifico',
+    discoveries: { ...(prev.discoveries ?? {}) },
+    quizAnswered: [...(prev.quizAnswered ?? [])],
+    daily: { best: { ...(prev.daily?.best ?? {}) }, completed: [...(prev.daily?.completed ?? [])] },
+    labBest: { ...(prev.labBest ?? {}) },
+  };
+}
+
+const emptyBoards = (): Record<PlayId, ScoreEntry[]> => Object.fromEntries(PLAY_IDS.map((m) => [m, []])) as unknown as Record<PlayId, ScoreEntry[]>;
+/** Días de Desafío Diario que se guardan en la clasificación local */
+const DAILY_KEEP = 7;
 
 /** Clave del progreso: el alias sin mayúsculas ni espacios sobrantes */
 export const aliasKey = (name: string) => name.trim().toLowerCase();
@@ -70,19 +121,44 @@ export interface ArcadeCheckpoint {
   endlessWave?: number;
 }
 
+export interface LabResult {
+  score: number;
+  completed: boolean;
+  /** Fichas del Museo descubiertas en la partida */
+  cards: string[];
+  /** Microscopio: neuronas descubiertas */
+  found?: number;
+  /** Sinapsis rítmica: porcentaje de aciertos */
+  accuracy?: number;
+}
+
 interface ProfileState {
   playerName: string;
   avatar: number;
-  leaderboard: Record<GameMode, ScoreEntry[]>;
+  leaderboard: Record<PlayId, ScoreEntry[]>;
+  /** Clasificación local del Desafío Diario: fecha → entradas */
+  dailyBoard: Record<string, ScoreEntry[]>;
+  /** Publicar las puntuaciones en la clasificación de todos */
+  shareOnline: boolean;
+  setShareOnline: (v: boolean) => void;
   progress: Record<string, PlayerProgress>;
   /** Id de la última entrada enviada, para resaltarla */
   lastEntryId: string | null;
   setPlayerName: (raw: string) => { ok: boolean; reason?: string };
   setAvatar: (i: number) => void;
-  /** Devuelve la posición (1 = primero) o null si no entra en el top. */
-  submitScore: (mode: GameMode, score: number, detail: string) => number | null;
+  /** Devuelve la posición (1 = primero) o null si no entra en el top. Con `daily`, va también a la del día. */
+  submitScore: (mode: PlayId, score: number, detail: string, opts?: { daily?: string }) => number | null;
+  setDifficulty: (d: Difficulty) => void;
+  /** Desbloquea fichas del Museo (las ya vistas se ignoran) */
+  discover: (ids: string[]) => void;
+  /** Respuesta a una pregunta de Cajal */
+  recordQuiz: (id: string, correct: boolean) => void;
+  recordDaily: (key: string, score: number, completed: boolean) => void;
+  recordLab: (game: LabGame, r: LabResult) => void;
   clearLeaderboard: () => void;
   recordStory: (r: StoryResult) => { stars: number };
+  /** Victoria en dificultad Nobel (cualquier modo) */
+  recordNobelWin: () => void;
   recordArcade: (c: ArcadeCheckpoint) => void;
   recordArcadeStars: (region: number, stars: number) => void;
   recordArcadeEnd: (r: { won: boolean; kills: number; region: number; wave: number; level: number }) => void;
@@ -129,15 +205,9 @@ export const useProfileStore = create<ProfileState>()(
         const s = get();
         if (!s.playerName) return;
         const key = aliasKey(s.playerName);
-        const prev = s.progress[key] ?? emptyProgress();
-        const p: PlayerProgress = {
-          stats: { ...EMPTY_STATS, ...prev.stats, levelsCompleted: [...(prev.stats.levelsCompleted ?? [])] },
-          stars: { ...prev.stars },
-          arcadeStars: { ...(prev.arcadeStars ?? {}) },
-          trophies: { ...prev.trophies },
-          onboarding: { ...prev.onboarding },
-        };
+        const p = cloneProgress(s.progress[key] ?? emptyProgress());
         fn(p);
+        p.stats.discoveries = Object.keys(p.discoveries).length;
         const fresh = newlyUnlocked(p.stats, p.stars, p.trophies, p.arcadeStars);
         const now = new Date().toISOString();
         for (const id of fresh) {
@@ -148,25 +218,94 @@ export const useProfileStore = create<ProfileState>()(
         set({ progress: { ...s.progress, [key]: p } });
       };
 
+      /** Marca fichas nuevas en el progreso y avisa de cada una */
+      const addCards = (p: PlayerProgress, ids: string[]) => {
+        const now = new Date().toISOString();
+        const fresh: string[] = [];
+        for (const id of ids) {
+          const card = MUSEUM_BY_ID[id];
+          if (!card || p.discoveries[id]) continue;
+          p.discoveries[id] = now;
+          fresh.push(card.title);
+        }
+        // un solo aviso aunque se descubran varias a la vez
+        if (fresh.length === 1) useToastStore.getState().push({ kind: 'discovery', title: fresh[0], body: 'Nueva ficha en el Museo' });
+        else if (fresh.length > 1) useToastStore.getState().push({ kind: 'discovery', title: `${fresh.length} fichas nuevas en el Museo`, body: fresh.join(', ') });
+      };
+
       return {
         playerName: '',
         avatar: 0,
-        leaderboard: { story: [], arcade: [], maze: [] },
+        leaderboard: emptyBoards(),
+        dailyBoard: {},
+        shareOnline: true,
         progress: {},
         lastEntryId: null,
+
+        setShareOnline: (v) => set({ shareOnline: v }),
 
         setPlayerName: (raw) => {
           const r = checkPlayerName(raw);
           if (!r.ok) return { ok: false, reason: r.reason };
           set({ playerName: r.value });
+          // cada alias juega con su dificultad
+          const d = get().progress[aliasKey(r.value)]?.difficulty;
+          setActiveDifficulty(isDifficulty(d) ? d : 'cientifico');
           return { ok: true };
         },
 
+        setDifficulty: (d) => {
+          setActiveDifficulty(d);
+          update((p) => { p.difficulty = d; });
+        },
+
+        discover: (ids) => update((p) => addCards(p, ids)),
+
+        recordQuiz: (id, correct) =>
+          update((p) => {
+            if (!correct || p.quizAnswered.includes(id)) return;
+            p.quizAnswered.push(id);
+            p.stats.quizCorrect++;
+            const q = QUIZ_BY_ID[id];
+            if (q) addCards(p, [q.card]);
+          }),
+
+        recordDaily: (key, score, completed) => {
+          update((p) => {
+            p.daily.best[key] = Math.max(p.daily.best[key] ?? 0, Math.round(score));
+            if (completed && !p.daily.completed.includes(key)) {
+              p.daily.completed.push(key);
+              p.stats.dailyCompleted++;
+              p.stats.dailyBestStreak = Math.max(p.stats.dailyBestStreak, dailyStreak(p.daily.completed, key));
+              addCards(p, ['diario']);
+            }
+            // solo se guardan los últimos días
+            const keys = Object.keys(p.daily.best).sort();
+            for (const k of keys.slice(0, Math.max(0, keys.length - 60))) delete p.daily.best[k];
+            p.daily.completed = p.daily.completed.slice(-60);
+          });
+        },
+
+        recordLab: (game, r) =>
+          update((p) => {
+            const st = p.stats;
+            st.labGames++;
+            p.labBest[game] = Math.max(p.labBest[game] ?? 0, Math.round(r.score));
+            if (game === 'micro' && r.found !== undefined) st.microBestFound = Math.max(st.microBestFound, r.found);
+            if (game === 'build' && r.completed) st.buildCompleted++;
+            if (game === 'rhythm' && r.accuracy !== undefined && r.completed) st.rhythmBestAccuracy = Math.max(st.rhythmBestAccuracy, Math.round(r.accuracy));
+            if (r.completed && activeDifficulty().difficulty === 'nobel') st.nobelWins++;
+            addCards(p, r.cards);
+          }),
+
+        recordNobelWin: () => update((p) => { p.stats.nobelWins++; }),
+
         setAvatar: (i) => set({ avatar: ((i % AVATAR_COUNT) + AVATAR_COUNT) % AVATAR_COUNT }),
 
-        submitScore: (mode, score, detail) => {
+        submitScore: (mode, score, detail, opts) => {
           const s = get();
           if (!s.playerName || score <= 0) return null;
+          const act = activeDifficulty();
           const entry: ScoreEntry = {
             id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
             name: s.playerName,
@@ -174,14 +313,23 @@ export const useProfileStore = create<ProfileState>()(
             score: Math.round(score),
             detail,
             date: new Date().toISOString(),
+            difficulty: act.difficulty,
+            ...(opts?.daily ? { modifier: act.modifier } : {}),
           };
           const { list, rank } = insertScore(s.leaderboard[mode] ?? [], entry);
-          set({ leaderboard: { ...s.leaderboard, [mode]: list }, lastEntryId: rank ? entry.id : null });
+          const patch: Partial<ProfileState> = { leaderboard: { ...s.leaderboard, [mode]: list }, lastEntryId: rank ? entry.id : null };
+          if (opts?.daily) {
+            const day = insertScore(s.dailyBoard[opts.daily] ?? [], entry);
+            const keys = [...Object.keys(s.dailyBoard), opts.daily].filter((k, i, a) => a.indexOf(k) === i).sort().slice(-DAILY_KEEP);
+            patch.dailyBoard = Object.fromEntries(keys.map((k) => [k, k === opts.daily ? day.list : s.dailyBoard[k]]));
+          }
+          set(patch);
           if (rank) update((p) => { p.stats.bestRank = Math.min(p.stats.bestRank, rank); });
+          if (s.shareOnline) submitOnline({ board: mode, daily: opts?.daily ?? null, entry });
           return rank;
         },
 
-        clearLeaderboard: () => set({ leaderboard: { story: [], arcade: [], maze: [] }, lastEntryId: null }),
+        clearLeaderboard: () => set({ leaderboard: emptyBoards(), dailyBoard: {}, lastEntryId: null }),
 
         recordStory: (r) => {
           let stars = 0;
@@ -194,7 +342,8 @@ export const useProfileStore = create<ProfileState>()(
               if (!st.levelsCompleted.includes(r.levelIndex)) st.levelsCompleted.push(r.levelIndex);
               if (r.hazardsHit === 0) st.flawlessWins++;
               st.fastestWin = Math.min(st.fastestWin, r.seconds);
-              stars = starsForWin(r.vitality, r.maxVitality, r.seconds);
+              stars = starsForWin(r.vitality, r.maxVitality, r.seconds, activeParams().story.starSeconds);
+              if (activeDifficulty().difficulty === 'nobel') st.nobelWins++;
               p.stars[r.levelIndex] = Math.max(p.stars[r.levelIndex] ?? 0, stars);
             }
           });
@@ -224,7 +373,10 @@ export const useProfileStore = create<ProfileState>()(
             st.arcadeBestRegion = Math.max(st.arcadeBestRegion, r.region);
             st.arcadeBestWave = Math.max(st.arcadeBestWave, r.wave);
             st.arcadeBestLevel = Math.max(st.arcadeBestLevel, r.level);
-            if (r.won) st.arcadeWins++;
+            if (r.won) {
+              st.arcadeWins++;
+              if (activeDifficulty().difficulty === 'nobel') st.nobelWins++;
+            }
           }),
 
         recordMaze: (c) =>
@@ -248,12 +400,14 @@ export const useProfileStore = create<ProfileState>()(
     },
     {
       name: 'cajal-profile',
-      version: 4,
+      version: 5,
       storage: safeStorage,
       partialize: (s) => ({
         playerName: s.playerName,
         avatar: s.avatar,
         leaderboard: s.leaderboard,
+        dailyBoard: s.dailyBoard,
+        shareOnline: s.shareOnline,
         progress: Object.fromEntries(
           Object.entries(s.progress).map(([k, p]) => [
             k,
@@ -265,17 +419,36 @@ export const useProfileStore = create<ProfileState>()(
         const s = (persisted ?? {}) as Partial<ProfileState>;
         if (version < 2) s.progress = {};
         // v3: modo Laberinto (clasificación propia y estadísticas nuevas con valor por defecto)
-        s.leaderboard = Object.assign({ story: [], arcade: [], maze: [] }, s.leaderboard);
-        for (const p of Object.values(s.progress ?? {})) {
-          p.stats = { ...EMPTY_STATS, ...p.stats, fastestWin: p.stats?.fastestWin ?? 1e9, bestRank: p.stats?.bestRank ?? 1e9 };
-          p.onboarding = Object.assign({ story: false, arcade: false, maze: false }, p.onboarding);
-          p.arcadeStars = p.arcadeStars ?? {}; // v4
+        // v5: minijuegos, Desafío Diario, dificultad, Museo y preguntas
+        s.leaderboard = Object.assign(emptyBoards(), s.leaderboard);
+        s.dailyBoard = s.dailyBoard ?? {};
+        s.shareOnline = s.shareOnline ?? true;
+        const progress: Record<string, PlayerProgress> = {};
+        for (const [k, p] of Object.entries(s.progress ?? {})) {
+          const c = cloneProgress(p as PlayerProgress);
+          c.stats.fastestWin = p.stats?.fastestWin ?? 1e9;
+          c.stats.bestRank = p.stats?.bestRank ?? 1e9;
+          progress[k] = c;
         }
+        s.progress = progress;
         return s as ProfileState;
+      },
+      onRehydrateStorage: () => (st) => {
+        // al cargar, la dificultad activa es la del alias guardado
+        const d = st?.playerName ? st.progress[aliasKey(st.playerName)]?.difficulty : undefined;
+        setActiveDifficulty(isDifficulty(d) ? d : 'cientifico');
       },
     },
   ),
 );
+
+/** Dificultad del alias actual */
+export function useDifficulty(): Difficulty {
+  return useProfileStore((s) => {
+    const d = s.playerName ? s.progress[aliasKey(s.playerName)]?.difficulty : undefined;
+    return isDifficulty(d) ? d : 'cientifico';
+  });
+}
 
 /** Progreso del alias actual (o vacío si aún no hay alias). */
 export function useCurrentProgress(): PlayerProgress {

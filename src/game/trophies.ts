@@ -30,6 +30,15 @@ export interface PlayerStats {
   mazeBestChain: number; // toxinas neutralizadas con un mismo BDNF
   mazeBestScore: number;
   arcadeBestEndless: number; // oleada máxima del modo infinito
+  quizCorrect: number; // preguntas de Cajal acertadas
+  discoveries: number; // fichas del Museo descubiertas
+  labGames: number; // partidas en los minijuegos del Laboratorio
+  microBestFound: number; // neuronas descubiertas en una partida del Microscopio
+  buildCompleted: number; // talleres de Construye la neurona completados
+  rhythmBestAccuracy: number; // mejor porcentaje de aciertos en Sinapsis rítmica
+  dailyCompleted: number; // Desafíos Diarios completados
+  dailyBestStreak: number; // racha más larga de días seguidos
+  nobelWins: number; // victorias en dificultad Nobel
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -55,9 +64,18 @@ export const EMPTY_STATS: PlayerStats = {
   mazeBestChain: 0,
   mazeBestScore: 0,
   arcadeBestEndless: 0,
+  quizCorrect: 0,
+  discoveries: 0,
+  labGames: 0,
+  microBestFound: 0,
+  buildCompleted: 0,
+  rhythmBestAccuracy: 0,
+  dailyCompleted: 0,
+  dailyBestStreak: 0,
+  nobelWins: 0,
 };
 
-export type TrophyGroup = 'general' | 'story' | 'arcade' | 'maze';
+export type TrophyGroup = 'general' | 'story' | 'arcade' | 'maze' | 'lab';
 
 export interface TrophyDef {
   id: string;
@@ -81,7 +99,7 @@ export const TROPHIES: TrophyDef[] = [
     id: 'primera-sinapsis', group: 'general', name: 'Primera sinapsis',
     how: 'Juega tu primera partida.',
     fact: 'Una sinapsis es el punto donde una neurona pasa su mensaje a otra. Cajal fue quien demostró que las neuronas son células separadas.',
-    check: (s) => s.storyGames + s.arcadeGames + s.mazeGames >= 1,
+    check: (s) => s.storyGames + s.arcadeGames + s.mazeGames + s.labGames >= 1,
   },
   {
     id: 'dos-mundos', group: 'general', name: 'Tres mundos',
@@ -93,14 +111,54 @@ export const TROPHIES: TrophyDef[] = [
     id: 'constancia', group: 'general', name: 'Constancia',
     how: 'Juega 10 partidas.',
     fact: 'Practicar algo muchas veces refuerza las conexiones entre neuronas: por eso lo que repites se te da cada vez mejor.',
-    check: (s) => s.storyGames + s.arcadeGames + s.mazeGames >= 10,
-    progress: (s) => ratio(s.storyGames + s.arcadeGames + s.mazeGames, 10),
+    check: (s) => s.storyGames + s.arcadeGames + s.mazeGames + s.labGames >= 10,
+    progress: (s) => ratio(s.storyGames + s.arcadeGames + s.mazeGames + s.labGames, 10),
   },
   {
     id: 'podio', group: 'general', name: 'En el podio',
     how: 'Entra en el top 3 de cualquier clasificación.',
     fact: 'Cajal recibió el Premio Nobel de Medicina en 1906, compartido con Camillo Golgi, el inventor de la tinción que Cajal perfeccionó.',
     check: (s) => s.bestRank <= 3,
+  },
+  {
+    id: 'curiosidad', group: 'general', name: 'Curiosidad científica',
+    how: 'Acierta 10 preguntas de Cajal.',
+    fact: 'Cajal escribió consejos para jóvenes investigadores: decía que la curiosidad y la paciencia valen más que el genio.',
+    check: (s) => s.quizCorrect >= 10,
+    progress: (s) => ratio(s.quizCorrect, 10),
+  },
+  {
+    id: 'museo-15', group: 'general', name: 'Visitante del museo',
+    how: 'Descubre 15 fichas del Museo.',
+    fact: 'Muchos dibujos originales de Cajal se conservan en el Instituto Cajal de Madrid y se han expuesto en museos de todo el mundo.',
+    check: (s) => s.discoveries >= 15,
+    progress: (s) => ratio(s.discoveries, 15),
+  },
+  {
+    id: 'museo-completo', group: 'general', name: 'Conservador del museo',
+    how: 'Descubre las 33 fichas del Museo.',
+    fact: 'La UNESCO incluyó el archivo de Cajal en el registro Memoria del Mundo en 2017.',
+    check: (s) => s.discoveries >= 33,
+    progress: (s) => ratio(s.discoveries, 33),
+  },
+  {
+    id: 'desafio-diario', group: 'general', name: 'Cita diaria',
+    how: 'Completa un Desafío Diario.',
+    fact: 'Repasar un poco cada día ayuda a recordar mucho mejor que estudiarlo todo de golpe.',
+    check: (s) => s.dailyCompleted >= 1,
+  },
+  {
+    id: 'racha-3', group: 'general', name: 'Racha de neuronas',
+    how: 'Completa el Desafío Diario tres días seguidos.',
+    fact: 'Los hábitos se forman repitiendo: las conexiones que usas a diario se vuelven más fuertes.',
+    check: (s) => s.dailyBestStreak >= 3,
+    progress: (s) => ratio(s.dailyBestStreak, 3),
+  },
+  {
+    id: 'premio-nobel', group: 'general', name: 'Premio Nobel',
+    how: 'Gana una partida en dificultad Nobel.',
+    fact: 'Cajal es, junto con Severo Ochoa, uno de los dos españoles que han ganado el Nobel de Medicina.',
+    check: (s) => s.nobelWins >= 1,
   },
 
   // ── Modo Historia ───────────────────────────────────────────────────────
@@ -256,6 +314,28 @@ export const TROPHIES: TrophyDef[] = [
     check: (s) => s.mazeBestScore >= 10000,
     progress: (s) => ratio(s.mazeBestScore, 10000),
   },
+
+  // ── Laboratorio ─────────────────────────────────────────────────────────
+  {
+    id: 'reaccion-negra', group: 'lab', name: 'Reacción negra',
+    how: 'Descubre 6 neuronas en una partida del Microscopio.',
+    fact: 'La tinción de Golgi solo tiñe un pequeño porcentaje de las neuronas, al azar. Por eso cada una se ve entera y nítida.',
+    check: (s) => s.microBestFound >= 6,
+    progress: (s) => ratio(s.microBestFound, 6),
+  },
+  {
+    id: 'arquitecto', group: 'lab', name: 'Arquitecto neuronal',
+    how: 'Completa el taller Construye la neurona.',
+    fact: 'Cajal propuso que la señal viaja siempre en el mismo sentido: de las dendritas al soma y del soma al axón.',
+    check: (s) => s.buildCompleted >= 1,
+  },
+  {
+    id: 'ritmo-perfecto', group: 'lab', name: 'Ritmo sináptico',
+    how: 'Termina Sinapsis rítmica con un 90 % de aciertos.',
+    fact: 'Las neuronas del cerebro trabajan a ritmos distintos, y esas ondas se pueden medir con un electroencefalograma.',
+    check: (s) => s.rhythmBestAccuracy >= 90,
+    progress: (s) => ratio(s.rhythmBestAccuracy, 90),
+  },
 ];
 
 /** Devuelve los ids que se cumplen ahora y aún no estaban desbloqueados. */
@@ -271,13 +351,13 @@ export const STAR_RULES = {
   fastSeconds: 90,
 };
 
-export function starsForWin(vitality: number, maxVitality: number, seconds: number): number {
+export function starsForWin(vitality: number, maxVitality: number, seconds: number, fastSeconds = STAR_RULES.fastSeconds): number {
   let stars = 1;
   if (vitality >= maxVitality) stars++;
-  if (seconds < STAR_RULES.fastSeconds) stars++;
+  if (seconds < fastSeconds) stars++;
   return stars;
 }
 
-export function starRulesText(): string[] {
-  return ['Completa el nivel', 'Termina con todos los corazones', `Termina en menos de ${STAR_RULES.fastSeconds} segundos`];
+export function starRulesText(fastSeconds = STAR_RULES.fastSeconds): string[] {
+  return ['Completa el nivel', 'Termina con todos los corazones', `Termina en menos de ${fastSeconds} segundos`];
 }

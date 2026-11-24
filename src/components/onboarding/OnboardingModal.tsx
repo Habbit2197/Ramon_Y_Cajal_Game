@@ -3,6 +3,7 @@
  * Aparece la primera vez que un alias entra en un modo y se puede repetir desde el menú o la pausa.
  * Los controles se adaptan a si el dispositivo es táctil o tiene teclado y ratón.
  */
+import { activeParams } from '../../game/difficulty';
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -221,7 +222,7 @@ function mazeSteps(touch: boolean): Step[] {
           </p>
           <ul className="flex flex-col gap-3">
             <Row icon={<Network className="w-5 h-5" />} color="#7ff3ff" title="La red se enciende">Cada axón que limpias se ilumina. Cada nivel es una red nueva y más rápida.</Row>
-            <Row icon={<Heart className="w-5 h-5" />} color="#ff8fb1" title={`${MAZE_RULES.lives} vidas`}>Si una toxina te toca, pierdes una. Ganas una extra cada 10.000 puntos.</Row>
+            <Row icon={<Heart className="w-5 h-5" />} color="#ff8fb1" title={`${activeParams().maze.lives} vidas`}>Si una toxina te toca, pierdes una. Ganas una extra cada 10.000 puntos.</Row>
           </ul>
           <p className="text-sm text-[#c9c2b4]">Es el modo más difícil: piensa la ruta antes de entrar en un pasillo.</p>
         </div>

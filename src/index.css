@@ -102,6 +102,27 @@
 .slide-selected.slide-fluor { box-shadow: 0 0 0 2px var(--fluor), 0 14px 34px -14px var(--fluor); }
 .slide-selected { transform: translateY(-1px); }
 
+/* Desafío del día: una ficha de cuaderno de laboratorio con margen verde */
+.daily-card {
+  background:
+    linear-gradient(90deg, rgb(127 224 168 / 0.16) 0 3px, transparent 3px),
+    rgb(11 18 32 / 0.74);
+  border: 1px solid rgb(127 224 168 / 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Fichas del Museo: lámina de papel ámbar con el dibujo, texto debajo */
+.museum-card {
+  background: rgb(18 26 42 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.1);
+}
+.museum-plate {
+  background:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 80% 90% at 50% 50%, #f3e4c2 0%, #e6cf9e 70%, #d2b47a 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .menu-enter { animation: none; }
   .slide { transition: none; }

@@ -62,9 +62,9 @@ import { useProfileStore, aliasKey } from '../store/useProfileStore';
 import { useToastStore } from '../store/useToastStore';
 
 describe('Medallas', () => {
-  it('hay 27 medallas con ids únicos, cómo conseguirlas y un dato', () => {
-    expect(TROPHIES).toHaveLength(27);
-    expect(new Set(TROPHIES.map((t) => t.id)).size).toBe(27);
+  it('hay 36 medallas con ids únicos, cómo conseguirlas y un dato', () => {
+    expect(TROPHIES).toHaveLength(36);
+    expect(new Set(TROPHIES.map((t) => t.id)).size).toBe(36);
     for (const t of TROPHIES) { expect(t.how.length).toBeGreaterThan(5); expect(t.fact.length).toBeGreaterThan(20); }
   });
 
@@ -110,7 +110,7 @@ describe('Progreso por alias', () => {
 describe('Modo Laberinto en el perfil', () => {
   it('registra la partida, la clasificación propia y las medallas del laberinto', () => {
     useToastStore.setState({ queue: [] });
-    useProfileStore.setState({ playerName: 'Laberinto', progress: {}, leaderboard: { story: [], arcade: [], maze: [] } });
+    useProfileStore.setState({ playerName: 'Laberinto', progress: {}, leaderboard: { story: [], arcade: [], maze: [], micro: [], build: [], rhythm: [] } });
     const st = useProfileStore.getState();
     st.recordMaze({ level: 3 });
     st.recordMaze({ bestChain: 4 });

@@ -5,7 +5,7 @@ import { create } from 'zustand';
 
 export interface Toast {
   id: number;
-  kind: 'trophy' | 'info';
+  kind: 'trophy' | 'info' | 'discovery';
   title: string;
   body: string;
 }

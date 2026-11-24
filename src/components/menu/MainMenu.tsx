@@ -7,10 +7,13 @@
  * Detrás, el Canvas3D del parque hace su recorrido de cámara por el nivel elegido.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Dices, Volume2, VolumeX, BookOpen, Trophy, X, Pencil, CircleHelp, Settings, Award } from 'lucide-react';
+import { Dices, Volume2, VolumeX, BookOpen, Trophy, X, Pencil, CircleHelp, Settings, Award, Landmark } from 'lucide-react';
 import { LEVELS } from '../../game/rules';
 import { randomAlias, NAME_MAX } from '../../game/names';
 import { useProfileStore, useCurrentProgress, type GameMode } from '../../store/useProfileStore';
+import type { PlayId } from '../../game/daily';
+import { MUSEUM } from '../../game/museum';
+import { DailyCard, DifficultyPicker, LabTiles, PLAY_COLOR, PLAY_LABEL } from './MenuExtras';
 import { TROPHIES } from '../../game/trophies';
 import { StarRow } from './TrophyBook';
 import { NeuronGlyph, SpecimenArt, AVATAR_COLORS } from './NeuronGlyph';
@@ -19,8 +22,8 @@ import { Leaderboard } from './Leaderboard';
 const shortLevelName = (name: string) => name.replace(/^Nivel \d+:\s*/, '');
 
 interface MainMenuProps {
-  mode: GameMode;
-  onModeChange: (m: GameMode) => void;
+  mode: PlayId;
+  onModeChange: (m: PlayId) => void;
   levelIndex: number;
   onLevelChange: (i: number) => void;
   onPlay: () => void;
@@ -29,20 +32,30 @@ interface MainMenuProps {
   onOpenGdd: () => void;
   onHowToPlay: () => void;
   onOpenBook: () => void;
+  onOpenMuseum: () => void;
   onOpenSettings: () => void;
+  onPlayDaily: () => void;
   /** false mientras hay otra ventana encima (onboarding, cuaderno…) */
   keyboardEnabled: boolean;
 }
 
-export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay, muted, onToggleMute, onOpenGdd, onHowToPlay, onOpenBook, onOpenSettings, keyboardEnabled }: MainMenuProps) {
+export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay, muted, onToggleMute, onOpenGdd, onHowToPlay, onOpenBook, onOpenMuseum, onOpenSettings, onPlayDaily, keyboardEnabled }: MainMenuProps) {
   const progress = useCurrentProgress();
+  const setPlayerName = useProfileStore((s) => s.setPlayerName);
   const medals = Object.keys(progress.trophies).length;
+  const cards = Object.keys(progress.discoveries).length;
+  const isLab = mode === 'micro' || mode === 'build' || mode === 'rhythm';
+  /** Sin alias, se asigna uno al azar antes de jugar el desafío */
+  const playDaily = () => {
+    if (!useProfileStore.getState().playerName) setPlayerName(randomAlias());
+    setEditingName(false);
+    onPlayDaily();
+  };
   const playerName = useProfileStore((s) => s.playerName);
   const avatar = useProfileStore((s) => s.avatar);
   const [editingName, setEditingName] = useState(!playerName);
   const [showBoard, setShowBoard] = useState(false);
 
-  const setPlayerName = useProfileStore((s) => s.setPlayerName);
   /** Nadie se queda atascado: sin alias, se asigna uno al azar y se juega */
   const playNow = () => {
     if (!useProfileStore.getState().playerName) setPlayerName(randomAlias());
@@ -64,9 +77,9 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
 
   return (
     <div className="fixed inset-0 z-20 overflow-y-auto menu-scrim">
-      <div className="min-h-full w-full max-w-[1200px] mx-auto safe-pad [--pad-x:1.25rem] [--pad-y:1.5rem] md:[--pad-x:2.5rem] grid gap-8 lg:grid-cols-[minmax(0,34rem)_minmax(0,22rem)] lg:justify-between content-between">
+      <div className="min-h-full w-full max-w-[1200px] mx-auto safe-pad [--pad-x:1.25rem] [--pad-y:1.5rem] md:[--pad-x:2.5rem] grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,34rem)_minmax(0,22rem)] lg:justify-between content-between">
         {/* Columna principal */}
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5 min-w-0">
           <header className="menu-enter">
             <h1 className="font-display text-[2.6rem] md:text-[3.1rem] leading-[0.95] text-[#f4efe6] tracking-[-0.01em]" style={{ fontVariationSettings: '"opsz" 144' }}>
               Cajal
@@ -96,16 +109,30 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
                   <Pencil className="w-3.5 h-3.5" aria-hidden />
                   Cambiar
                 </button>
-                <button
-                  type="button"
-                  onClick={onOpenBook}
-                  className="ml-auto inline-flex items-center gap-2 text-sm rounded-full pl-2.5 pr-3.5 py-1.5 bg-[#e8b45a]/12 border border-[#e8b45a]/35 text-[#f4efe6] hover:bg-[#e8b45a]/20 cursor-pointer"
-                >
-                  <Award className="w-4 h-4 text-[#ffd166]" aria-hidden />
-                  Cuaderno <span className="text-[#ffd166] font-semibold [font-variant-numeric:tabular-nums]">{medals}/{TROPHIES.length}</span>
-                </button>
+                <span className="ml-auto flex flex-wrap justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={onOpenBook}
+                    className="inline-flex items-center gap-2 text-sm rounded-full pl-2.5 pr-3.5 py-1.5 bg-[#e8b45a]/12 border border-[#e8b45a]/35 text-[#f4efe6] hover:bg-[#e8b45a]/20 cursor-pointer"
+                  >
+                    <Award className="w-4 h-4 text-[#ffd166]" aria-hidden />
+                    Cuaderno <span className="text-[#ffd166] font-semibold [font-variant-numeric:tabular-nums]">{medals}/{TROPHIES.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenMuseum}
+                    className="inline-flex items-center gap-2 text-sm rounded-full pl-2.5 pr-3.5 py-1.5 bg-[#7fe0a8]/10 border border-[#7fe0a8]/35 text-[#f4efe6] hover:bg-[#7fe0a8]/18 cursor-pointer"
+                  >
+                    <Landmark className="w-4 h-4 text-[#7fe0a8]" aria-hidden />
+                    Museo <span className="text-[#7fe0a8] font-semibold [font-variant-numeric:tabular-nums]">{cards}/{MUSEUM.length}</span>
+                  </button>
+                </span>
               </div>
             )}
+          </div>
+
+          <div className="menu-enter" style={{ animationDelay: '90ms' }}>
+            <DailyCard onPlay={playDaily} />
           </div>
 
           {/* Modos */}
@@ -155,20 +182,31 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
             />
           </fieldset>
 
+          <div className="menu-enter flex flex-col gap-4" style={{ animationDelay: '150ms' }}>
+            <LabTiles mode={mode} onSelect={onModeChange} />
+            <DifficultyPicker />
+          </div>
+
           <div className="flex flex-wrap items-center gap-3 menu-enter" style={{ animationDelay: '180ms' }}>
             <button
               type="button"
               onClick={playNow}
               data-start="true"
-              className={`h-14 px-8 rounded-2xl font-semibold text-base transition-[transform,background-color] active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
-                { story: 'bg-[#e8b45a] hover:bg-[#f2c470] text-[#1a1206]', arcade: 'bg-[#5ee6ff] hover:bg-[#8ff0ff] text-[#03141a]', maze: 'bg-[#b49cff] hover:bg-[#c9b8ff] text-[#150a2e]' }[mode]
-              }`}
+              className="h-14 px-8 rounded-2xl font-semibold text-base transition-[transform,filter] hover:brightness-110 active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ background: PLAY_COLOR[mode].bg, color: PLAY_COLOR[mode].fg }}
             >
-              {mode === 'story' ? `Jugar: ${shortLevelName(LEVELS[levelIndex].name)}` : mode === 'arcade' ? 'Jugar arcade' : 'Jugar laberinto'}
+              {mode === 'story' ? `Jugar: ${shortLevelName(LEVELS[levelIndex].name)}` : `Jugar: ${PLAY_LABEL[mode]}`}
             </button>
             {playerName && !editingName ? (
               <span className="text-sm text-[#c9c2b4] max-w-[17rem] leading-snug">
-                {{ story: 'Objetivo: llena tu potencial cerebral al 100 % y cruza el portal de Cajal.', arcade: 'Objetivo: sobrevive a 5 oleadas en cada una de las 3 regiones del cerebro.', maze: 'Objetivo: recoge todas las vesículas de la red sin que te alcancen las toxinas.' }[mode]}
+                {{
+                  story: 'Objetivo: llena tu potencial cerebral al 100 % y cruza el portal de Cajal.',
+                  arcade: 'Objetivo: sobrevive a 5 oleadas en cada una de las 3 regiones del cerebro.',
+                  maze: 'Objetivo: recoge todas las vesículas de la red sin que te alcancen las toxinas.',
+                  micro: 'Objetivo: tiñe tres muestras y descubre qué neuronas esconden.',
+                  build: 'Objetivo: monta tres neuronas pieza a pieza y haz pasar el impulso.',
+                  rhythm: 'Objetivo: suma mensajes hasta que la neurona dispare, sin pulsar los frenos.',
+                }[mode]}
               </span>
             ) : (
               <span className="text-sm text-[#a9a293] max-w-[17rem] leading-snug">Si no eliges alias, te daremos uno al azar.</span>
@@ -177,17 +215,24 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
 
           <footer className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[#a9a293] pt-2">
             <span className="hidden md:inline">
-              {{ story: 'WASD o flechas para moverte, Espacio para el impulso', arcade: 'WASD para moverte, el ratón apunta, Espacio para el impulso', maze: 'Flechas o WASD para elegir camino, Espacio para disparar' }[mode]}
+              {{
+                story: 'WASD o flechas para moverte, Espacio para el impulso',
+                arcade: 'WASD para moverte, el ratón apunta, Espacio para el impulso',
+                maze: 'Flechas o WASD para elegir camino, Espacio para disparar',
+                micro: 'Arrastra el ratón para teñir la muestra',
+                build: 'Arrastra cada pieza a su sitio, o tócala y luego toca el hueco',
+                rhythm: 'Teclas A, S y D (o flechas) para lanzar los mensajeros',
+              }[mode]}
             </span>
             <span className="flex items-center gap-1 md:ml-auto">
-              <button
+              {!isLab && <button
                 type="button"
                 onClick={onHowToPlay}
                 className="h-10 px-3.5 mr-1 inline-flex items-center gap-2 rounded-full border border-white/12 text-[#e9e3d6] hover:bg-white/5 cursor-pointer"
               >
                 <CircleHelp className="w-4 h-4" aria-hidden />
                 Cómo se juega
-              </button>
+              </button>}
               <IconButton label="Ajustes" onClick={onOpenSettings}>
                 <Settings className="w-4 h-4" />
               </IconButton>

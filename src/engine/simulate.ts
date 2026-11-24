@@ -56,16 +56,16 @@ export function simulate(w: World, dt: number) {
 
     if (kind === 'swarmer') {
       swarmerDesired(poolIdx, pool, p.x, p.z, _steerOut);
-      steer(body, _steerOut.x, _steerOut.z, 24, dt);
+      steer(body, _steerOut.x * w.diff.speedMult, _steerOut.z * w.diff.speedMult, 24, dt);
     } else if (kind.startsWith('tank')) {
       const tx = p.x - m.x[k];
       const tz = p.z - m.z[k];
       const td = Math.hypot(tx, tz) || 1;
-      const speed = kind === 'tank0' ? 3.5 : kind === 'tank1' ? 4.5 : 5.8;
+      const speed = (kind === 'tank0' ? 3.5 : kind === 'tank1' ? 4.5 : 5.8) * w.diff.speedMult;
       steer(body, (tx / td) * speed, (tz / td) * speed, 18, dt);
     } else if (kind === 'homing') {
       homingDesired(poolIdx, pool, p.x, p.z, dt, _steerOut);
-      steer(body, _steerOut.x, _steerOut.z, 28, dt);
+      steer(body, _steerOut.x * w.diff.speedMult, _steerOut.z * w.diff.speedMult, 28, dt);
     }
   }
 
@@ -189,7 +189,7 @@ export function simulate(w: World, dt: number) {
           p.vitality -= 1;
           w.hitsThisRegion++;
           p.brainPower = Math.max(0, p.brainPower - 18);
-          p.invulnerableTimer = 1.6; // i-frames tras golpe: margen para reaccionar
+          p.invulnerableTimer = w.diff.invulnerable; // i-frames tras golpe: margen para reaccionar (según dificultad)
           // Retroceso: las toxinas cercanas salen despedidas para no encadenar golpes
           for (let j = 0; j < m.count; j++) {
             const kx = m.x[j] - p.x, kz = m.z[j] - p.z, kd = Math.hypot(kx, kz);

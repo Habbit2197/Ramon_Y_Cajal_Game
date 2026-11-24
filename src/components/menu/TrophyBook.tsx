@@ -13,6 +13,7 @@ const GROUPS: { id: TrophyGroup; title: string; color: string }[] = [
   { id: 'story', title: 'Modo Historia', color: '#e8b45a' },
   { id: 'arcade', title: 'Modo Arcade', color: '#5ee6ff' },
   { id: 'maze', title: 'Modo Laberinto', color: '#b49cff' },
+  { id: 'lab', title: 'Laboratorio', color: '#7fe0a8' },
 ];
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' });
@@ -83,7 +84,7 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
             <p className="mt-3 text-xs text-[#a9a293] leading-relaxed">
-              Una estrella por completar el nivel, otra por terminar con todos los corazones y otra por hacerlo en menos de 90 segundos.
+              Una estrella por completar el nivel, otra por terminar con todos los corazones y otra por hacerlo deprisa: 115 segundos en Explorador, 90 en Científico y 72 en Nobel.
             </p>
             <h3 className="font-display text-lg text-white mt-5">Estrellas del Arcade</h3>
             <ul className="mt-3 flex flex-col gap-2">
@@ -101,7 +102,7 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
           <section className="menu-panel rounded-2xl p-5">
             <h3 className="font-display text-lg text-white">Tus números</h3>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <Stat label="Partidas" value={st.storyGames + st.arcadeGames + (st.mazeGames ?? 0)} />
+              <Stat label="Partidas" value={st.storyGames + st.arcadeGames + (st.mazeGames ?? 0) + (st.labGames ?? 0)} />
               <Stat label="Hábitos recogidos" value={st.habitsCollected} />
               <Stat label="Niveles completados" value={st.levelsCompleted.length} suffix=" de 3" />
               <Stat label="Toxinas eliminadas" value={st.totalKills} />
@@ -109,6 +110,10 @@ export function TrophyBook({ onClose }: { onClose: () => void }) {
               <Stat label="Mejor nivel arcade" value={st.arcadeBestLevel} />
               <Stat label="Mejor nivel laberinto" value={st.mazeBestLevel ?? 1} />
               <Stat label="Toxinas aturdidas" value={st.mazeStuns ?? 0} />
+              <Stat label="Preguntas acertadas" value={st.quizCorrect ?? 0} />
+              <Stat label="Fichas del museo" value={st.discoveries ?? 0} />
+              <Stat label="Partidas de laboratorio" value={st.labGames ?? 0} />
+              <Stat label="Desafíos diarios" value={st.dailyCompleted ?? 0} />
             </dl>
           </section>
         </div>

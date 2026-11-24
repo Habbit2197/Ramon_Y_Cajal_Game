@@ -16,3 +16,7 @@
 /juegos/cajal-sinapsis/manifest.webmanifest
   Content-Type: application/manifest+json
   Cache-Control: no-cache
+
+# Clasificación compartida (si se publica la función): nunca en caché del navegador ni de la CDN para los envíos
+/api/juegos/cajal-sinapsis/leaderboard
+  X-Content-Type-Options: nosniff

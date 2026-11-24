@@ -1,47 +1,76 @@
-# Auditoría de seguridad — Cajal: Sinapsis 3D
+# Auditoría de seguridad: Cajal: Sinapsis 3D
 
-Fecha: 19/11/2026 · Rama: `archivo-subruta` · Publicación prevista: `https://santiagoramonycajal.org/juegos/cajal-sinapsis/`
+- Fecha: 24/11/2026
+- Publicación prevista: `https://santiagoramonycajal.org/juegos/cajal-sinapsis/`
+- Cambio importante desde la auditoría del 19/11: ahora hay una **clasificación compartida**. Es la única parte que usa la red y solo habla con el propio sitio. Si no se publica la función del servidor, el juego funciona igual que antes, sin red.
 
 ## Resumen
 
 | Punto | Resultado |
 |---|---|
-| Peticiones de red en tiempo de ejecución | **Ninguna.** Sin `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` ni `sendBeacon` en `src/`. |
-| Servicios externos / CDNs | **Ninguno.** Fuentes autoalojadas (`@fontsource-variable`), sin analítica, sin anuncios, sin cargadores de modelos remotos. |
-| Variables de entorno | Solo `import.meta.env.PROD` y `import.meta.env.BASE_URL` (las pone Vite al compilar). Ningún `.env` en el repositorio; `.env*` está en `.gitignore`. |
-| Claves, tokens, contraseñas | **Ninguno** en el código ni en el historial de git. |
-| Datos guardados | Solo en el navegador del jugador (`localStorage`): `cajal-profile` (alias, progreso, trofeos, ajustes, clasificación local) y la prueba temporal `__cajal_probe__`. Nada sale del dispositivo. |
-| Datos personales | El alias es libre y opcional, pasa por un filtro de palabras malsonantes y no se envía a ningún sitio. La clasificación es local. |
-| Dependencias | `npm audit --omit=dev`: 0 vulnerabilidades. Un único lockfile (`package-lock.json`). |
-| Service worker | Acotado a `/juegos/cajal-sinapsis/`. No intercepta ninguna otra ruta del sitio, solo usa cachés con prefijo `cajal-sinapsis-` y solo sirve la copia sin conexión para la portada del juego. |
+| Peticiones de red al jugar | Solo a **la misma dirección del sitio**: `GET` y `POST` a `/api/juegos/cajal-sinapsis/leaderboard`, en `src/net/onlineBoard.ts`. No hay más `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` ni `sendBeacon`. Se envía sin cookies (`credentials: 'omit'`). |
+| Servicios externos / CDNs | **Ninguno.** Fuentes autoalojadas, sin analítica, sin anuncios, sin cargadores remotos. |
+| Variables de entorno | `import.meta.env.PROD`, `BASE_URL`, `MODE` y la opcional `VITE_LEADERBOARD_API`: solo una ruta, no es secreta. Ningún `.env` en el repositorio. |
+| Claves, tokens, contraseñas | **Ninguno** en el juego ni en el historial. El servidor usa dos secretos (`SALT`, `ADMIN_TOKEN`) que se configuran en Cloudflare, nunca en el código. |
+| Datos que salen del dispositivo | Solo si se publica la función: alias filtrado, color de avatar, puntos, una línea de detalle, la dificultad y el día del desafío. Se puede desactivar en Ajustes («Publicar en la clasificación de todos»). |
+| Datos en el servidor | Sin IP, sin cookies, sin identificadores. Límite de envíos con un resumen SHA-256 de sal + IP + fecha, que se borra al cabo de una hora. Ver `server/README.md`. |
+| Datos en el navegador | `localStorage`: `cajal-profile` (alias, progreso, medallas, fichas del Museo, ajustes, clasificación local), `cajal-meta` (ajustes y cartas del Arcade), `cajal-pending-scores` (puntuaciones esperando conexión, máximo 20) y la prueba temporal `__cajal_probe__`. |
+| Alias | Entre 2 y 16 caracteres; sin emails, teléfonos, webs ni palabras malsonantes (también disfrazadas con números). El filtro se aplica en el juego y otra vez en el servidor. Moderación con borrado y bloqueo. |
+| Dependencias | `npm audit --omit=dev`: 0 vulnerabilidades. Un único lockfile (`package-lock.json`). Eliminado `@types/express`, que no se usaba. |
+| Service worker | Acotado a `/juegos/cajal-sinapsis/`. No intercepta la API (está fuera de su ruta), ni ninguna otra parte del sitio. Solo usa cachés con el prefijo `cajal-sinapsis-`. |
 
 ## URLs que aparecen dentro de `dist/`
 
-Todas son texto inerte de las librerías, ninguna se llama al jugar:
+Todas son texto de las librerías y ninguna se llama al jugar:
+- `http://www.w3.org/...`: espacios de nombres SVG, XML y MathML.
+- `https://react.dev/errors/`: enlace dentro de los mensajes de error de React.
+- `github.com/pmndrs/...`, `opencollective.com`, `docs.pmnd.rs`, `tailwindcss.com`: créditos y mensajes de las librerías.
 
-- `http://www.w3.org/...` — espacios de nombres SVG/XML/MathML.
-- `https://react.dev/errors/` — enlace dentro de mensajes de error de React.
-- `https://github.com/pmndrs/...`, `opencollective.com`, `docs.pmnd.rs`, `tailwindcss.com` — créditos y mensajes de las librerías.
+La única petición real es la ruta relativa de la clasificación.
 
 ## Cómo repetir la auditoría
 
+Peticiones, variables y secretos en el código:
+
 ```bash
 grep -rnE "fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|import\.meta\.env|process\.env|api[_-]?key|secret|password" src
+```
+
+URLs dentro de la versión compilada:
+
+```bash
 npm run build && grep -rhoE "https?://[a-zA-Z0-9./_-]+" dist | sort | uniq -c
+```
+
+Secretos en el historial de git:
+
+```bash
 git log -p | grep -iE "api[_-]?key\s*[:=]|secret\s*[:=]|password\s*[:=]|ghp_|AIza"
+```
+
+Vulnerabilidades en las dependencias:
+
+```bash
 npm audit --omit=dev
 ```
 
-## Comprobación del alcance del service worker
+Tests del juego y del servidor (este último contra SQLite):
 
-Probado con un sitio simulado (portada y artículo en la raíz, juego en `/juegos/cajal-sinapsis/`):
+```bash
+npx vitest run
+```
 
-1. Alcance registrado: `/juegos/cajal-sinapsis/`.
-2. Tras abrir el juego, el artículo de la raíz **no** queda controlado por el service worker.
-3. Sin conexión: el juego abre y se juega; la portada, el artículo y `/juegos/otro-juego/` dan el error normal del navegador (no reciben el juego).
+## Comprobación del service worker
+
+Probado con un sitio simulado: portada y artículo en la raíz, juego en `/juegos/cajal-sinapsis/` y la API en `/api/...`.
+
+1. El alcance registrado es `/juegos/cajal-sinapsis/`.
+2. Después de abrir el juego, la portada y los artículos **no** quedan controlados por el service worker.
+3. Sin conexión, el juego abre y se puede jugar. La portada, los artículos y `/juegos/otro-juego/` dan el error normal del navegador, no el juego.
+4. Sin conexión, las puntuaciones se guardan en cola y se envían al volver la red.
 
 ## Para publicar
 
-- Compilar: `npm ci && npm run build` → subir el contenido de `dist/` a `/juegos/cajal-sinapsis/` del sitio.
-- Otra ruta: `BASE_PATH=/juegos/otro-slug/ npm run build` (empieza y acaba en `/`).
-- Añadir las cabeceras de `docs/archivo-headers.txt` al `_headers` de la raíz del sitio.
+1. Juego: `npm ci && npm run build`. Subir el contenido de `dist/` a `/juegos/cajal-sinapsis/`. Para otra ruta: `BASE_PATH=/juegos/otro-slug/ npm run build`.
+2. Cabeceras: añadir las de `docs/archivo-headers.txt` al `_headers` de la raíz del sitio.
+3. Clasificación compartida (opcional): seguir `server/README.md`. Hay que crear la base D1, configurar los secretos y copiar `server/dist/leaderboard.js` a `functions/`.

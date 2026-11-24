@@ -8,7 +8,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Pause, Play, Home, CircleHelp, Volume2, VolumeX, Zap, RotateCcw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Crosshair } from 'lucide-react';
-import { createMazeGame, MAZE_RULES, type MazeState, type MazeInput } from '../../game/maze/sim';
+import { createMazeGame, MAZE_RULES, powerSecondsFor, type MazeState, type MazeInput } from '../../game/maze/sim';
+import { activeParams } from '../../game/difficulty';
+import { CajalQuiz } from '../../components/ui/CajalQuiz';
+import { dailyFor, finishRun } from '../../store/useSession';
 import type { Dir } from '../../game/maze/graph';
 import { MazeScene, GHOST_COLORS } from './MazeScene';
 import { useProfileStore } from '../../store/useProfileStore';
@@ -51,10 +54,16 @@ const snapshot = (s: MazeState): Hud => ({
   lives: s.lives,
   charges: s.charges,
   power: s.power,
-  powerMax: MAZE_RULES.powerSeconds(s.level),
+  powerMax: powerSecondsFor(s),
   activated: 1 - s.pelletsLeft / s.pellets.length,
   phase: s.phase,
 });
+
+/** Partida nueva con la dificultad activa (y la semilla del Desafío Diario si toca) */
+function newMazeGame() {
+  const dp = activeParams();
+  return createMazeGame(dailyFor('maze')?.seed, { ...dp.maze, scoreMult: dp.scoreMult });
+}
 
 export function MazeMode({
   onExit, muted, onToggleMute, coach, onCoachDone, onHelp, helpOpen,
@@ -62,7 +71,7 @@ export function MazeMode({
   onExit: () => void; muted: boolean; onToggleMute: () => void;
   coach: boolean; onCoachDone: () => void; onHelp: () => void; helpOpen: boolean;
 }) {
-  const state = useRef<MazeState>(createMazeGame());
+  const state = useRef<MazeState>(newMazeGame());
   const input = useRef<MazeInput & { fireQueued: boolean }>({ dir: null, fire: false, fireQueued: false });
   const paused = useRef(false);
   const shake = useRef(0);
@@ -71,13 +80,18 @@ export function MazeMode({
   const [isPaused, setPaused] = useState(false);
   const [result, setResult] = useState<{ score: number; level: number; rank: number | null } | null>(null);
   const [touch] = useState(isTouchDevice);
+  /** Pregunta de Cajal al activar una red */
+  const [quiz, setQuiz] = useState(false);
   const reducedFlashes = useRunStore((s) => s.settings.reducedFlashes);
   const shakeScale = useRunStore((s) => s.settings.shakeScale);
 
-  paused.current = isPaused || helpOpen || !!result;
+  paused.current = isPaused || helpOpen || !!result || quiz;
+  // Solo en desarrollo: acceso al estado para las pruebas automáticas (no existe en la versión publicada)
+  if (import.meta.env.DEV) (window as unknown as { __cajalMaze?: typeof state }).__cajalMaze = state;
 
   const restart = useCallback(() => {
-    state.current = createMazeGame();
+    state.current = newMazeGame();
+    setQuiz(false);
     input.current = { dir: null, fire: false, fireQueued: false };
     setResult(null);
     setPaused(false);
@@ -126,11 +140,13 @@ export function MazeMode({
           case 'clear':
             soundEngine.playVictoryFanfare();
             rec({ level: s.level + 1 });
+            // la pregunta sale cuando se ha visto el mensaje de «Red activada»
+            window.setTimeout(() => { if (state.current === s && s.phase === 'cleared') setQuiz(true); }, 1300);
             break;
           case 'gameover': {
             soundEngine.playDefeatSting();
             const profile = useProfileStore.getState();
-            const rank = profile.submitScore('maze', s.score, `Nivel ${s.level}`);
+            const rank = finishRun('maze', s.score, `Nivel ${s.level}`, s.level >= 2);
             profile.recordMazeEnd({ level: s.level, score: s.score });
             setResult({ score: s.score, level: s.level, rank });
             break;
@@ -292,7 +308,19 @@ export function MazeMode({
         </div>
       )}
 
-      <MazeCoach active={coach && !result} state={state} onFinish={onCoachDone} />
+      <MazeCoach active={coach && !result && !quiz} state={state} onFinish={onCoachDone} />
+
+      {quiz && !result && (
+        <CajalQuiz
+          reward="bdnf"
+          accent="#b49cff"
+          seed={dailyFor('maze') ? dailyFor('maze')!.seed + state.current.level : undefined}
+          onDone={(ok) => {
+            if (ok) state.current.pendingPower = true;
+            setQuiz(false);
+          }}
+        />
+      )}
 
       {/* Pausa */}
       {isPaused && !helpOpen && !result && (
@@ -347,7 +375,7 @@ export function MazeMode({
                 </div>
               </div>
               <div className="md:border-l md:border-white/10 md:pl-6">
-                <Leaderboard initialMode="maze" limit={8} compact />
+                <Leaderboard initialMode={dailyFor('maze') ? 'daily' : 'maze'} limit={8} compact />
               </div>
             </motion.div>
           </div>

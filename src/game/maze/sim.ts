@@ -94,7 +94,23 @@ export interface MazeState {
   bestChain: number;
   events: MazeEvent[];
   rng: () => number;
+  /** Dificultad de la partida (velocidad de las toxinas, duración del BDNF, puntos) */
+  diff: MazeDifficulty;
+  /** Premio de la pregunta de Cajal: empezar el siguiente nivel con BDNF */
+  pendingPower?: boolean;
 }
+
+export interface MazeDifficulty {
+  ghostSpeed: number;
+  powerSeconds: number;
+  scoreMult: number;
+  lives: number;
+}
+
+export const DEFAULT_MAZE_DIFF: MazeDifficulty = { ghostSpeed: 1, powerSeconds: 1, scoreMult: 1, lives: MAZE_RULES.lives };
+
+/** Segundos de BDNF de un nivel con la dificultad de la partida */
+export const powerSecondsFor = (s: Pick<MazeState, 'level' | 'diff'>) => MAZE_RULES.powerSeconds(s.level) * s.diff.powerSeconds;
 
 // ── Utilidades de movimiento ──────────────────────────────────────────────
 export function moverPos(g: MazeGraph, m: Mover): { x: number; z: number } {
@@ -186,14 +202,19 @@ export function startLevel(s: MazeState, level: number) {
   s.charges = MAZE_RULES.charges;
   s.rechargeTimer = 0;
   resetPositions(s);
+  if (s.pendingPower) {
+    s.pendingPower = false;
+    grantPower(s);
+  }
 }
 
-export function createMazeGame(seed = (Math.random() * 2 ** 31) | 0): MazeState {
+export function createMazeGame(seed = (Math.random() * 2 ** 31) | 0, diff: MazeDifficulty = DEFAULT_MAZE_DIFF): MazeState {
   const s = {
     level: 1,
     seed,
     score: 0,
-    lives: MAZE_RULES.lives,
+    diff,
+    lives: diff.lives,
     nextExtraLife: MAZE_RULES.extraLifeEvery,
     time: 0,
     stuns: 0,
@@ -204,6 +225,13 @@ export function createMazeGame(seed = (Math.random() * 2 ** 31) | 0): MazeState 
   startLevel(s, 1);
   s.events.push('start');
   return s;
+}
+
+/** Ayuda por acertar una pregunta de Cajal: BDNF al empezar el nivel siguiente */
+export function grantPower(s: MazeState) {
+  s.power = powerSecondsFor(s);
+  s.chain = 0;
+  for (const gh of s.ghosts) if (gh.mode === 'active') gh.mode = 'frightened';
 }
 
 // ── IA de las toxinas ─────────────────────────────────────────────────────
@@ -288,7 +316,7 @@ function fire(s: MazeState) {
 }
 
 function addScore(s: MazeState, pts: number) {
-  s.score += pts;
+  s.score += Math.round(pts * s.diff.scoreMult);
   if (s.score >= s.nextExtraLife) {
     s.lives++;
     s.nextExtraLife += MAZE_RULES.extraLifeEvery;
@@ -355,7 +383,7 @@ export function stepMaze(s: MazeState, input: MazeInput, dt: number) {
     s.pelletsLeft--;
     if (pe.power) {
       addScore(s, R.points.power);
-      s.power = R.powerSeconds(s.level);
+      s.power = powerSecondsFor(s);
       s.chain = 0;
       for (const gh of s.ghosts) if (gh.mode === 'active') { gh.mode = 'frightened'; if (!atNode(gh)) { [gh.from, gh.to] = [gh.to, gh.from]; gh.t = 1 - gh.t; gh.dir = OPP[gh.dir]; } }
       s.events.push('power');
@@ -393,7 +421,7 @@ export function stepMaze(s: MazeState, input: MazeInput, dt: number) {
   }
 
   // ── Toxinas ──
-  const base = R.playerSpeed * R.ghostSpeed(s.level);
+  const base = R.playerSpeed * R.ghostSpeed(s.level) * s.diff.ghostSpeed;
   for (const gh of s.ghosts) {
     if (gh.stun > 0) { gh.stun -= dt; continue; }
     if (gh.mode === 'home') {

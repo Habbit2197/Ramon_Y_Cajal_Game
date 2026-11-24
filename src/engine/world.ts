@@ -7,6 +7,7 @@
  * dentro de este World singleton mutable.
  */
 
+import { activeParams } from '../game/difficulty';
 import { SpatialGrid } from './grid';
 import { createProjectilePool, type ProjectilePool } from '../game/projectiles';
 import { createOrbPool, spawnOrb, type OrbPool } from '../game/orbs';
@@ -194,7 +195,8 @@ export class World {
   ranvierNodes: RanvierNodesPool;
 
   director: Director = new Director();
-  diff = { hpMult: 1.0 };
+  /** Dificultad de la partida: la vida de las toxinas sube por oleada; el resto sale de la dificultad elegida */
+  diff = { hpMult: 1.0, speedMult: 1.0, scoreMult: 1.0, budgetMult: 1.0, invulnerable: 1.6 };
   tier: 'low' | 'mid' | 'high' = 'high';
   maxEnemies = 160;
   alpha = 0; // Factor de interpolación para el render
@@ -543,7 +545,7 @@ export class World {
     if (pool.hp[poolIdx] <= 0) {
       feel.emit('kill');
       this.kills++;
-      this.score += Math.round(KILL_POINTS[kind] * (1 + this.region * 0.5));
+      this.score += Math.round(KILL_POINTS[kind] * (1 + this.region * 0.5) * this.diff.scoreMult);
       this.addRipple(x, z, 0.8);
 
       // Partículas y color temático por tipo de toxina
@@ -586,6 +588,11 @@ export class World {
   elapsed = 0;
 
   reset(seed = 12345) {
+    const dp = activeParams();
+    this.diff.speedMult = dp.arcade.enemySpeed;
+    this.diff.scoreMult = dp.scoreMult;
+    this.diff.budgetMult = dp.arcade.waveBudget;
+    this.diff.invulnerable = dp.arcade.invulnerable;
     this.rng = mulberry32(seed);
     this.score = 0;
     this.ultRequest = false;
@@ -598,7 +605,7 @@ export class World {
     this.player.vx = 0;
     this.player.vz = 0;
     this.player.brainPower = 100;
-    this.player.vitality = 3;
+    this.player.vitality = Math.max(1, 3 + dp.arcade.vitalityDelta);
     this.player.maxVitality = 3;
     this.player.dashCooldown = 0;
     this.player.dashActiveTimer = 0;

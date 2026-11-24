@@ -18,15 +18,23 @@ import { StoryPauseModal, StoryOutcomeModal, timeBonus } from './modes/StoryModa
 // Cada modo se descarga al elegirlo: el menú aparece antes (el Arcade incluye el motor de física)
 const ArcadeMode = lazy(() => import('./modes/ArcadeMode').then((m) => ({ default: m.ArcadeMode })));
 const MazeMode = lazy(() => import('./modes/maze/MazeMode').then((m) => ({ default: m.MazeMode })));
+const LabMode = lazy(() => import('./modes/lab/LabMode').then((m) => ({ default: m.LabMode })));
+const MuseumBook = lazy(() => import('./components/menu/MuseumBook').then((m) => ({ default: m.MuseumBook })));
 /** Precarga el modo en cuanto se selecciona en el menú, para que al pulsar «Jugar» ya esté listo */
-export const prefetchMode = (m: GameMode) => {
+export const prefetchMode = (m: PlayId) => {
   if (m === 'arcade') void import('./modes/ArcadeMode');
   else if (m === 'maze') void import('./modes/maze/MazeMode');
+  else if (m === 'micro' || m === 'build' || m === 'rhythm') void import('./modes/lab/LabMode');
 };
 import { LEVELS } from './game/rules';
 import { soundEngine } from './game/sound';
 import { useGameStore } from './store/useGameStore';
-import { useProfileStore, aliasKey, type GameMode } from './store/useProfileStore';
+import { useProfileStore, aliasKey, type GameMode, type LabGame } from './store/useProfileStore';
+import { useSession, finishRun } from './store/useSession';
+import { dailyChallenge, type PlayId } from './game/daily';
+import { activeParams } from './game/difficulty';
+import { quizPointsBonus } from './game/quiz';
+import { CajalQuiz } from './components/ui/CajalQuiz';
 import { useRunStore } from './store/useRunStore';
 import { feelSettings } from './engine/feel';
 import { useAutoPause, useWakeLock } from './engine/mobile';
@@ -38,7 +46,8 @@ import { SettingsPanel } from './components/menu/SettingsPanel';
 
 const GddModal = lazy(() => import('./components/GddModal').then((m) => ({ default: m.GddModal })));
 
-type Screen = 'menu' | 'story' | 'arcade' | 'maze';
+type Screen = 'menu' | GameMode | LabGame;
+const isMainMode = (m: PlayId): m is GameMode => m === 'story' || m === 'arcade' || m === 'maze';
 
 const INITIAL_HUD: HudSnapshot = {
   brainPower: 20,
@@ -72,7 +81,7 @@ function ModeLoading() {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu');
-  const [mode, setMode] = useState<GameMode>('story');
+  const [mode, setMode] = useState<PlayId>('story');
   const [levelIndex, setLevelIndex] = useState(0);
   const [storyState, setStoryState] = useState<GameAppState>('title');
   const [resetSignal, setResetSignal] = useState(0);
@@ -83,6 +92,10 @@ export default function App() {
   /** Guía interactiva activa en la partida actual */
   const [coach, setCoach] = useState<GameMode | null>(null);
   const [bookOpen, setBookOpen] = useState(false);
+  const [museumOpen, setMuseumOpen] = useState(false);
+  /** Victoria del Modo Historia a la espera de la pregunta de Cajal */
+  const [storyQuiz, setStoryQuiz] = useState<{ stats: HudSnapshot; base: number } | null>(null);
+  const daily = useSession((s) => s.daily);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [gddOpen, setGddOpen] = useState(false);
@@ -93,7 +106,7 @@ export default function App() {
 
   // Contrato del Game Shell: el estado visible en <body data-state>
   useEffect(() => {
-    document.body.dataset.state = screen === 'arcade' || screen === 'maze' ? screen : canvasState;
+    document.body.dataset.state = screen === 'menu' || screen === 'story' ? canvasState : screen;
   }, [screen, canvasState]);
 
   const toggleMute = useCallback(() => setMuted(soundEngine.toggleMute()), []);
@@ -121,45 +134,64 @@ export default function App() {
 
   const backToMenu = useCallback(() => {
     setOutcome(null);
+    setStoryQuiz(null);
     setStoryState('title');
     setScreen('menu');
+    useSession.getState().begin(null);
   }, []);
 
   const startMode = useCallback(
-    (m: GameMode, withCoach: boolean) => {
-      setCoach(withCoach ? m : null);
-      if (m === 'story') startStory(levelIndex);
+    (m: PlayId, withCoach: boolean, storyLevel = levelIndex) => {
+      setCoach(withCoach && isMainMode(m) ? m : null);
+      if (m === 'story') startStory(storyLevel);
       else setScreen(m);
     },
     [levelIndex, startStory],
   );
 
   /** La primera vez que un alias juega un modo, ve antes el onboarding y luego la guía en partida. */
+  const launch = useCallback(
+    (m: PlayId, storyLevel?: number) => {
+      const p = useProfileStore.getState();
+      if (isMainMode(m) && !p.progress[aliasKey(p.playerName)]?.onboarding[m]) setOnboarding({ mode: m, thenStart: true });
+      else startMode(m, false, storyLevel);
+    },
+    [startMode],
+  );
+
   const play = useCallback(() => {
-    const p = useProfileStore.getState();
-    const seen = p.progress[aliasKey(p.playerName)]?.onboarding[mode];
-    if (!seen) setOnboarding({ mode, thenStart: true });
-    else startMode(mode, false);
-  }, [mode, startMode]);
+    useSession.getState().begin(null);
+    launch(mode);
+  }, [mode, launch]);
+
+  /** Desafío Diario: mismo modo, mapa y modificador para todos hoy */
+  const playDaily = useCallback(() => {
+    const d = dailyChallenge();
+    useSession.getState().begin(d);
+    setMode(d.mode);
+    if (d.mode === 'story') setLevelIndex(d.levelIndex);
+    prefetchMode(d.mode);
+    launch(d.mode, d.levelIndex);
+  }, [launch]);
 
   const finishOnboarding = useCallback(() => {
     if (!onboarding) return;
     useProfileStore.getState().setOnboardingSeen(onboarding.mode, true);
     setOnboarding(null);
-    if (onboarding.thenStart) startMode(onboarding.mode, true);
-  }, [onboarding, startMode]);
+    if (onboarding.thenStart) startMode(onboarding.mode, true, useSession.getState().daily?.mode === 'story' ? useSession.getState().daily!.levelIndex : levelIndex);
+  }, [onboarding, startMode, levelIndex]);
 
   const handleHudUpdate = useCallback((snapshot: HudSnapshot) => {
     setHud(snapshot);
     useGameStore.getState().setBrainPower(snapshot.brainPower);
   }, []);
 
-  const handleStageEnd = useCallback(
-    (kind: 'victory' | 'defeat', stats: HudSnapshot) => {
-      const score = stats.score + (kind === 'victory' ? timeBonus(stats.elapsedTime) : 0);
+  /** Cierra la partida de historia: clasificación, estrellas y ventana de resultado */
+  const settleStory = useCallback(
+    (kind: 'victory' | 'defeat', stats: HudSnapshot, score: number) => {
       const detail = `${shortName(LEVELS[levelIndex].name)}, ${kind === 'victory' ? 'completado' : 'sin terminar'}`;
       const profile = useProfileStore.getState();
-      const rank = profile.submitScore('story', score, detail);
+      const rank = finishRun('story', score, detail, kind === 'victory');
       const { stars } = profile.recordStory({
         won: kind === 'victory',
         levelIndex,
@@ -170,11 +202,28 @@ export default function App() {
         habits: stats.synapsesCollected,
       });
       setOutcome({ kind, stats, score, rank, stars });
-      setCoach(null);
       setStoryState('gameover');
     },
     [levelIndex],
   );
+
+  const handleStageEnd = useCallback(
+    (kind: 'victory' | 'defeat', stats: HudSnapshot) => {
+      const base = Math.round((stats.score + (kind === 'victory' ? timeBonus(stats.elapsedTime) : 0)) * activeParams().scoreMult);
+      setCoach(null);
+      if (kind === 'victory') {
+        // antes del resultado, una pregunta de Cajal (acertar suma un 15 %)
+        setStoryQuiz({ stats, base });
+        setStoryState('gameover');
+      } else settleStory(kind, stats, base);
+    },
+    [settleStory],
+  );
+
+  // Solo en desarrollo: permite a las pruebas automáticas terminar un nivel de historia
+  useEffect(() => {
+    if (import.meta.env.DEV) (window as unknown as { __cajalStageEnd?: typeof handleStageEnd }).__cajalStageEnd = handleStageEnd;
+  }, [handleStageEnd]);
 
   // Atajos del Modo Historia
   useEffect(() => {
@@ -219,10 +268,12 @@ export default function App() {
           muted={muted}
           onToggleMute={toggleMute}
           onOpenGdd={() => setGddOpen(true)}
-          onHowToPlay={() => setOnboarding({ mode, thenStart: true })}
+          onHowToPlay={() => isMainMode(mode) && setOnboarding({ mode, thenStart: true })}
           onOpenBook={() => setBookOpen(true)}
+          onOpenMuseum={() => setMuseumOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
-          keyboardEnabled={!onboarding && !bookOpen && !settingsOpen && !gddOpen}
+          onPlayDaily={playDaily}
+          keyboardEnabled={!onboarding && !bookOpen && !settingsOpen && !gddOpen && !museumOpen}
         />
       )}
 
@@ -246,6 +297,19 @@ export default function App() {
         <StoryPauseModal level={level} hud={hud} onResume={() => setStoryState('playing')} onRestart={() => startStory(levelIndex)} onExit={backToMenu} onHelp={() => setOnboarding({ mode: 'story', thenStart: false })} />
       )}
 
+      {screen === 'story' && storyQuiz && !outcome && (
+        <CajalQuiz
+          reward="points"
+          accent="#e8b45a"
+          seed={daily?.mode === 'story' ? daily.seed : undefined}
+          onDone={(ok) => {
+            const q = storyQuiz;
+            setStoryQuiz(null);
+            settleStory('victory', q.stats, q.base + (ok ? quizPointsBonus(q.base) : 0));
+          }}
+        />
+      )}
+
       {screen === 'story' && storyState === 'gameover' && outcome && !gddOpen && (
         <StoryOutcomeModal
           outcome={outcome.kind}
@@ -254,7 +318,7 @@ export default function App() {
           finalScore={outcome.score}
           rank={outcome.rank}
           stars={outcome.stars}
-          onNext={() => startStory(levelIndex + 1)}
+          onNext={daily ? undefined : () => startStory(levelIndex + 1)}
           onRetry={() => startStory(levelIndex)}
           onExit={backToMenu}
         />
@@ -290,8 +354,15 @@ export default function App() {
         </Suspense>
       )}
 
+      {(screen === 'micro' || screen === 'build' || screen === 'rhythm') && (
+        <Suspense fallback={<ModeLoading />}>
+          <LabMode game={screen} onExit={backToMenu} muted={muted} onToggleMute={toggleMute} />
+        </Suspense>
+      )}
+
       {onboarding && <OnboardingModal mode={onboarding.mode} onDone={finishOnboarding} />}
       {bookOpen && <TrophyBook onClose={() => setBookOpen(false)} />}
+      <Suspense fallback={null}>{museumOpen && <MuseumBook onClose={() => setMuseumOpen(false)} />}</Suspense>
       {settingsOpen && <SettingsPanel muted={muted} onToggleMute={toggleMute} onClose={() => setSettingsOpen(false)} />}
       <TrophyToasts />
 

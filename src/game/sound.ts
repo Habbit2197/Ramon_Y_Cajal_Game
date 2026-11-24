@@ -47,6 +47,41 @@ class SoundEngine {
     return this.ctx;
   }
 
+  /** Nota simple para los minijuegos (ritmo, aciertos, errores). `delay` en segundos. */
+  public tone(freq: number, duration = 0.12, type: OscillatorType = 'sine', volume = 0.12, delay = 0): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+  }
+
+  /** Golpe de percusión suave (pulso del ritmo) */
+  public kick(volume = 0.18): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.18);
+  }
+
   public toggleMute(): boolean {
     this.muted = !this.muted;
     return this.muted;
