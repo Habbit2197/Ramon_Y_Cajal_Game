@@ -152,7 +152,7 @@ export function PlayerBody({ position = [0, 0.5, 0] }: PlayerProps = {}) {
 
     ref.current.setNextKinematicTranslation({ x: p.x, y: 0.5, z: p.z });
     visualRef.current?.position.set(p.x, 0.5, p.z); // la malla sigue a la simulación sin esperar a Rapier
-    useGameStore.getState().setPlayerPosition([p.x, 0.5, p.z]);
+    // (antes se copiaba la posición a Zustand en cada fotograma: nadie la leía y creaba un array por frame)
 
     // 4. Timers de dash, invulnerabilidad e inercia
     if (p.dashActiveTimer > 0) p.dashActiveTimer = Math.max(0, p.dashActiveTimer - dt);

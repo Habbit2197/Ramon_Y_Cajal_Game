@@ -2,6 +2,8 @@
  * StoryModals.tsx — Pausa y final de nivel del Modo Historia (el parque).
  * Conserva los diálogos de Cajal y el apunte neurocientífico de cada nivel.
  */
+import { dailyFor } from '../store/useSession';
+import { activeParams } from '../game/difficulty';
 import { motion } from 'motion/react';
 import { Play, RotateCcw, Home, ChevronRight, CircleHelp } from 'lucide-react';
 import { StarRow } from '../components/menu/TrophyBook';
@@ -58,13 +60,15 @@ export function StoryOutcomeModal({ outcome, levelIndex, stats, finalScore, rank
   finalScore: number;
   rank: number | null;
   stars: number;
-  onNext: () => void;
+  /** Sin siguiente nivel (p. ej. en el Desafío Diario) */
+  onNext?: () => void;
   onRetry: () => void;
   onExit: () => void;
 }) {
   const level = LEVELS[levelIndex];
   const won = outcome === 'victory';
-  const hasNext = won && levelIndex < LEVELS.length - 1;
+  const hasNext = won && !!onNext && levelIndex < LEVELS.length - 1;
+  const fast = activeParams().story.starSeconds;
   const bonus = won ? timeBonus(stats.elapsedTime) : 0;
 
   return (
@@ -86,7 +90,7 @@ export function StoryOutcomeModal({ outcome, levelIndex, stats, finalScore, rank
               <div className="mt-3 flex items-center gap-3">
                 <StarRow n={stars} size={26} />
                 <span className="text-sm text-[#c9c2b4]">
-                  {stars === 3 ? '¡Nivel perfecto!' : stars === 2 ? 'Te falta una estrella: termina en menos de 90 s con todos los corazones.' : 'Termina con todos los corazones y en menos de 90 s para más estrellas.'}
+                  {stars === 3 ? '¡Nivel perfecto!' : stars === 2 ? `Te falta una estrella: termina en menos de ${fast} s con todos los corazones.` : `Termina con todos los corazones y en menos de ${fast} s para más estrellas.`}
                 </span>
               </div>
             )}
@@ -95,7 +99,7 @@ export function StoryOutcomeModal({ outcome, levelIndex, stats, finalScore, rank
           <div>
             <div className="text-5xl sm:text-6xl font-semibold [font-variant-numeric:tabular-nums] text-[#ffd166] leading-none">{finalScore.toLocaleString('es-ES')}</div>
             <p className="mt-2 text-sm text-[#e9e3d6]">
-              {won && bonus > 0 && <>Incluye {bonus} puntos por rapidez. </>}
+              {won && bonus > 0 && <>Incluye puntos por rapidez{activeParams().scoreMult !== 1 ? ' y el multiplicador de dificultad' : ''}. </>}
               {rank === 1 ? '¡Nuevo récord en este dispositivo!' : rank ? `Puesto ${rank} de la clasificación.` : finalScore > 0 ? 'No ha entrado en el top 20 esta vez.' : ''}
             </p>
           </div>
@@ -127,7 +131,7 @@ export function StoryOutcomeModal({ outcome, levelIndex, stats, finalScore, rank
         </div>
 
         <div className="md:border-l md:border-white/10 md:pl-6">
-          <Leaderboard initialMode="story" limit={8} compact />
+          <Leaderboard initialMode={dailyFor('story') ? 'daily' : 'story'} limit={8} compact />
         </div>
       </motion.div>
       </div>

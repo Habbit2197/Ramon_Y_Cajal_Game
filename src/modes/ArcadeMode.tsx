@@ -19,6 +19,8 @@ import { ArcadeCoach } from '../components/onboarding/Coach';
 import { isTouchDevice } from '../components/onboarding/OnboardingModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAutoPause } from '../engine/mobile';
+import { CajalQuiz } from '../components/ui/CajalQuiz';
+import { dailyFor, finishRun } from '../store/useSession';
 
 const REGION_NAMES = ['Corteza prefrontal', 'Hipocampo', 'Cerebelo'];
 const EVOLUTION_IDS = Object.entries(UPGRADES).filter(([, u]) => u.rarity === 'evolution').map(([id]) => id);
@@ -35,12 +37,15 @@ export function ArcadeMode({
   /** Tras superar las tres regiones: elegir entre guardar o seguir en modo infinito */
   const [victory, setVictory] = useState(false);
   const [touch] = useState(isTouchDevice);
+  /** Pregunta de Cajal al superar una región (antes de elegir carta) */
+  const [quiz, setQuiz] = useState(false);
 
   const start = useCallback(() => {
     resetClock();
     setResult(null);
     setVictory(false);
-    useRunStore.getState().newRun();
+    setQuiz(false);
+    useRunStore.getState().newRun(dailyFor('arcade')?.seed);
   }, []);
 
   useEffect(() => {
@@ -58,6 +63,7 @@ export function ArcadeMode({
     feel.listeners.add(onFeel);
     const unsub = useRunStore.subscribe((s, prev) => {
       if (s.phase === 'title') return;
+      if (s.region > prev.region && !s.endless) setQuiz(true);
       if (s.region !== prev.region || s.wave !== prev.wave || s.level !== prev.level || s.owned !== prev.owned) {
         rec({
           region: s.region,
@@ -80,7 +86,7 @@ export function ArcadeMode({
     const region = Math.min(s.region, 2);
     const detail = s.endless ? `Modo infinito, oleada ${s.wave + 1}` : won ? 'Las tres regiones superadas' : `${REGION_NAMES[region]}, oleada ${s.wave + 1}`;
     const profile = useProfileStore.getState();
-    const rank = profile.submitScore('arcade', world.score, detail);
+    const rank = finishRun('arcade', world.score, detail, won || s.region >= 1);
     profile.recordArcadeEnd({ won, kills: world.kills, region, wave: region === 0 ? s.wave : 5, level: s.level });
     setResult({ won, score: world.score, kills: world.kills, detail, seconds: world.elapsed, rank, regionStars: s.regionStars });
   }, []);
@@ -116,7 +122,23 @@ export function ArcadeMode({
       {phase !== 'gameover' && <RogueliteHUD onPause={() => setPhase('paused')} muted={muted} onToggleMute={onToggleMute} />}
       {touch && phase === 'playing' && <TouchControls />}
       <ArcadeCoach active={coach && phase !== 'gameover'} onFinish={onCoachDone} />
-      <DraftModal />
+      {!quiz && <DraftModal />}
+      {quiz && phase !== 'gameover' && (
+        <CajalQuiz
+          reward="shield"
+          accent="#5ee6ff"
+          seed={dailyFor('arcade') ? dailyFor('arcade')!.seed + useRunStore.getState().region : undefined}
+          onDone={(ok) => {
+            if (ok) {
+              const p = world.player;
+              p.shieldActive = true;
+              p.shieldTimer = 0;
+              p.vitality = Math.min(p.mods.maxVitality, p.vitality + 1);
+            }
+            setQuiz(false);
+          }}
+        />
+      )}
 
       {phase === 'paused' && !helpOpen && (
         <div role="dialog" aria-modal="true" aria-labelledby="arcade-pause" className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-[#020a0d]/75 backdrop-blur-sm">

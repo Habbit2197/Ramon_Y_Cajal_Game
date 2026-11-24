@@ -4,6 +4,8 @@
 import { X } from 'lucide-react';
 import { useRunStore } from '../../store/useRunStore';
 import { useProfileStore } from '../../store/useProfileStore';
+import { DifficultyPicker } from './MenuExtras';
+import { onlineEnabled } from '../../net/onlineBoard';
 
 const SHAKE_OPTIONS: { label: string; value: number }[] = [
   { label: 'Normal', value: 1 },
@@ -16,6 +18,8 @@ export function SettingsPanel({ muted, onToggleMute, onClose }: { muted: boolean
   const update = useRunStore((s) => s.updateSettings);
   const playerName = useProfileStore((s) => s.playerName);
   const resetOnboarding = useProfileStore((s) => s.setOnboardingSeen);
+  const shareOnline = useProfileStore((s) => s.shareOnline);
+  const setShareOnline = useProfileStore((s) => s.setShareOnline);
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="settings-title" className="fixed inset-0 z-40 bg-[#0b1220]/80 backdrop-blur-md overflow-y-auto">
@@ -28,6 +32,15 @@ export function SettingsPanel({ muted, onToggleMute, onClose }: { muted: boolean
             </button>
           </div>
 
+          <DifficultyPicker compact />
+          {onlineEnabled() && (
+            <Toggle
+              label="Publicar en la clasificación de todos"
+              hint="Solo se envían tu alias, el color de tu neurona y tus puntos. Si lo apagas, tus puntuaciones se quedan en este dispositivo."
+              on={shareOnline}
+              onChange={() => setShareOnline(!shareOnline)}
+            />
+          )}
           <Toggle label="Sonido" hint="Efectos y música del juego." on={!muted} onChange={onToggleMute} />
           <Toggle label="Vibración" hint="En móviles Android, vibra al recibir golpes." on={settings.haptics} onChange={() => update({ haptics: !settings.haptics })} />
           <Toggle
@@ -65,6 +78,7 @@ export function SettingsPanel({ muted, onToggleMute, onClose }: { muted: boolean
                 onClick={() => {
                   resetOnboarding('story', false);
                   resetOnboarding('arcade', false);
+                  resetOnboarding('maze', false);
                   onClose();
                 }}
                 className="h-10 px-4 rounded-xl border border-white/15 text-sm text-[#e9e3d6] hover:bg-white/5 cursor-pointer shrink-0"

@@ -163,7 +163,7 @@ export class Director {
   waveActive = false;
 
   startWave(w: number, r: number, world: World) {
-    this.budget = 20 + 12 * w + 25 * r;
+    this.budget = Math.round((20 + 12 * w + 25 * r) * world.diff.budgetMult);
     world.diff.hpMult = 1 + 0.05 * w + 0.15 * r;
     this.interval = Math.max(0.6, 2.2 - 0.12 * w);
     this.cd = 0.5;

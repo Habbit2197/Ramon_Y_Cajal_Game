@@ -45,7 +45,7 @@ function setup() {
     bodies.push(...list);
     (world.pools as Record<string, { attach: (b: RapierRigidBody[]) => void }>)[kind].attach(list as unknown as RapierRigidBody[]);
   }
-  useProfileStore.setState({ playerName: 'Test Arcade', progress: {}, leaderboard: { story: [], arcade: [], maze: [] } });
+  useProfileStore.setState({ playerName: 'Test Arcade', progress: {}, leaderboard: { story: [], arcade: [], maze: [], micro: [], build: [], rhythm: [] } });
   useRunStore.getState().newRun(7);
 }
 

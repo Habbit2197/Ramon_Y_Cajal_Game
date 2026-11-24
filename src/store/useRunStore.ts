@@ -163,7 +163,7 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
           if (s.endless) {
             const nextW = s.wave + 1;
             world.wave = nextW;
-            world.score += 200 + 20 * nextW;
+            world.score += Math.round((200 + 20 * nextW) * world.diff.scoreMult);
             world.director.startWave(nextW % WAVES_PER_REGION, REGIONS.length + Math.floor(nextW / WAVES_PER_REGION), world);
             useProfileStore.getState().recordArcade({ endlessWave: nextW + 1 });
             set({ wave: nextW });
@@ -176,7 +176,7 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
           if (s.wave < WAVES_PER_REGION - 1) {
             const nextW = s.wave + 1;
             world.wave = nextW;
-            world.score += 150 * nextW;
+            world.score += Math.round(150 * nextW * world.diff.scoreMult);
             world.director.startWave(nextW, s.region, world);
             set({ wave: nextW, phase: 'playing' });
             return;
@@ -192,11 +192,11 @@ export const useRunStore = create<RunSlice & MetaSlice>()(
           const nextR = s.region + 1;
           if (nextR >= REGIONS.length) {
             // Las tres regiones superadas: victoria (el jugador puede seguir en modo infinito)
-            world.score += 3000;
+            world.score += Math.round(3000 * world.diff.scoreMult);
             set({ runWon: true, phase: 'gameover', regionStars, lastRegionStars: stars, bestRegion: REGIONS.length, fichas: s.fichas + 5 });
             return;
           }
-          world.score += 1000;
+          world.score += Math.round(1000 * world.diff.scoreMult);
           world.region = nextR;
           world.wave = 0;
           world.director.startWave(0, nextR, world);

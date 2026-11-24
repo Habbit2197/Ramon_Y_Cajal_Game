@@ -1,6 +1,7 @@
 /**
  * GameOverModal.tsx — Fin de partida del modo Arcade, con puesto en la clasificación.
  */
+import { dailyFor } from '../../store/useSession';
 import { motion } from 'motion/react';
 import { RotateCcw, Home, Infinity as InfinityIcon, Save } from 'lucide-react';
 import { StarRow } from '../menu/TrophyBook';
@@ -143,7 +144,7 @@ export function GameOverModal({ result, onRetry, onExit }: { result: ArcadeResul
         </div>
 
         <div className="md:border-l md:border-white/10 md:pl-6">
-          <Leaderboard initialMode="arcade" limit={8} compact />
+          <Leaderboard initialMode={dailyFor('arcade') ? 'daily' : 'arcade'} limit={8} compact />
         </div>
       </motion.div>
       </div>

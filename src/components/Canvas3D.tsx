@@ -1,3 +1,4 @@
+import { activeParams } from '../game/difficulty';
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -1215,6 +1216,8 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
     let hazards: ActiveHazard[] = [];
     let currentLevel: LevelConfig = LEVELS[levelIndexRef.current] || LEVELS[0];
     let playerState: PlayerPhysicsState = createInitialPlayerState(currentLevel);
+    /** Dificultad de la partida en curso (se lee al empezar cada nivel) */
+    let storyDiff = activeParams().story;
 
     let hitstopTimer = 0;
     let cameraTrauma = 0;
@@ -1259,7 +1262,9 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
 
     const buildStageEntities = (lvlIdx: number) => {
       currentLevel = LEVELS[lvlIdx] || LEVELS[0];
+      storyDiff = activeParams().story;
       playerState = createInitialPlayerState(currentLevel);
+      playerState.vitality = Math.min(playerState.maxVitality, storyDiff.vitality);
       const startFatigue = calculateCognitiveFatigue(playerState.brainPower);
       currentDesaturation = startFatigue.desaturation;
       currentVignette = startFatigue.vignette;
@@ -1629,7 +1634,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
           }
 
           // Update 3 Distinct Hazard Archetypes + Windup Telegraphs
-          const difficultyMult = 1 + levelIndexRef.current * 0.16;
+          const difficultyMult = (1 + levelIndexRef.current * 0.16) * storyDiff.hazardSpeed;
           for (const haz of hazards) {
             const distToPlayer = Math.hypot(playerState.x - haz.x, playerState.z - haz.z);
 
@@ -1705,7 +1710,7 @@ export const Canvas3D: React.FC<Canvas3DProps> = ({
             haz.group.rotation.y += dt * 2.0;
 
             if (isCircleCollision(playerState.x, playerState.z, 0.78, haz.x, haz.z, 0.75)) {
-              const { nextState, applied } = applyItemCollision(playerState, haz.spec);
+              const { nextState, applied } = applyItemCollision(playerState, { ...haz.spec, brainDelta: Math.round(haz.spec.brainDelta * storyDiff.hazardDamage) });
               if (applied) {
                 playerState = nextState;
                 hitstopTimer = 0.05; // 50ms Hit Stop before desaturation ramps up
