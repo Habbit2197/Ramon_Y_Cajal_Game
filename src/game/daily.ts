@@ -10,8 +10,8 @@ import { mulberry32 } from '../engine/rng';
 
 export { mulberry32 };
 
-export type PlayId = 'story' | 'arcade' | 'maze' | 'micro' | 'build' | 'rhythm';
-export const PLAY_IDS: PlayId[] = ['story', 'arcade', 'maze', 'micro', 'build', 'rhythm'];
+export type PlayId = 'story' | 'arcade' | 'maze' | 'micro' | 'build' | 'rhythm' | 'brush';
+export const PLAY_IDS: PlayId[] = ['story', 'arcade', 'maze', 'micro', 'build', 'rhythm', 'brush'];
 
 /** Hash FNV-1a de 32 bits: convierte «2026-11-24» en una semilla estable */
 export function hashString(s: string): number {
@@ -49,6 +49,7 @@ const MODIFIERS: Record<PlayId, DailyModifier[]> = {
   micro: ['clasico', 'contrarreloj', 'fragil'],
   build: ['clasico', 'contrarreloj', 'fragil'],
   rhythm: ['clasico', 'contrarreloj', 'fragil'],
+  brush: ['clasico', 'contrarreloj'],
 };
 
 export const DAILY_GOALS: Record<PlayId, string> = {
@@ -58,13 +59,14 @@ export const DAILY_GOALS: Record<PlayId, string> = {
   micro: 'Descubre al menos 6 neuronas con la tinción.',
   build: 'Construye las tres neuronas del taller.',
   rhythm: 'Termina la canción con un 70 % de aciertos o más.',
+  brush: 'Deja los dientes limpios al 80 % en los dos minutos.',
 };
 
 /** El desafío de un día. Función pura: misma fecha → mismo desafío. */
 export function dailyChallenge(key: string = dateKey()): DailyChallenge {
   const seed = hashString(`cajal:${key}`);
   const rng = mulberry32(seed);
-  // Los modos rotan sin repetirse dentro de cada bloque de 6 días
+  // Los modos rotan sin repetirse dentro de cada bloque de días (uno por modo)
   const dayNumber = Math.floor(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)) / 86_400_000);
   const block = Math.floor(dayNumber / PLAY_IDS.length);
   const order = shuffle([...PLAY_IDS], mulberry32(hashString(`cajal-block:${block}`)));
