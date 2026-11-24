@@ -7,7 +7,7 @@
  * Detrás, el Canvas3D del parque hace su recorrido de cámara por el nivel elegido.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Dices, Volume2, VolumeX, BookOpen, Trophy, X, Pencil, CircleHelp, Settings, Award, Landmark } from 'lucide-react';
+import { Dices, Volume2, VolumeX, BookOpen, Trophy, X, Pencil, CircleHelp, Settings, Award, Landmark, School } from 'lucide-react';
 import { LEVELS } from '../../game/rules';
 import { randomAlias, NAME_MAX } from '../../game/names';
 import { useProfileStore, useCurrentProgress, type GameMode } from '../../store/useProfileStore';
@@ -33,13 +33,14 @@ interface MainMenuProps {
   onHowToPlay: () => void;
   onOpenBook: () => void;
   onOpenMuseum: () => void;
+  onOpenClassroom: () => void;
   onOpenSettings: () => void;
   onPlayDaily: () => void;
   /** false mientras hay otra ventana encima (onboarding, cuaderno…) */
   keyboardEnabled: boolean;
 }
 
-export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay, muted, onToggleMute, onOpenGdd, onHowToPlay, onOpenBook, onOpenMuseum, onOpenSettings, onPlayDaily, keyboardEnabled }: MainMenuProps) {
+export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay, muted, onToggleMute, onOpenGdd, onHowToPlay, onOpenBook, onOpenMuseum, onOpenClassroom, onOpenSettings, onPlayDaily, keyboardEnabled }: MainMenuProps) {
   const progress = useCurrentProgress();
   const setPlayerName = useProfileStore((s) => s.setPlayerName);
   const medals = Object.keys(progress.trophies).length;
@@ -224,7 +225,7 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
                 rhythm: 'Teclas A, S y D (o flechas) para lanzar los mensajeros',
               }[mode]}
             </span>
-            <span className="flex items-center gap-1 md:ml-auto">
+            <span className="flex flex-wrap items-center gap-1 md:ml-auto">
               {!isLab && <button
                 type="button"
                 onClick={onHowToPlay}
@@ -233,6 +234,14 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
                 <CircleHelp className="w-4 h-4" aria-hidden />
                 Cómo se juega
               </button>}
+              <button
+                type="button"
+                onClick={onOpenClassroom}
+                className="h-10 px-3.5 mr-1 inline-flex items-center gap-2 rounded-full border border-[#7fb8ff]/35 text-[#e9e3d6] hover:bg-[#7fb8ff]/10 cursor-pointer"
+              >
+                <School className="w-4 h-4 text-[#7fb8ff]" aria-hidden />
+                Aula
+              </button>
               <IconButton label="Ajustes" onClick={onOpenSettings}>
                 <Settings className="w-4 h-4" />
               </IconButton>

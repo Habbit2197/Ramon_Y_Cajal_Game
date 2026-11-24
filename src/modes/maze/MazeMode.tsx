@@ -361,7 +361,7 @@ export function MazeMode({
                   {(Object.keys(GHOST_COLORS) as (keyof typeof GHOST_COLORS)[]).map((k) => (
                     <li key={k} className="flex items-center gap-2 text-[#e9e3d6]">
                       <span className="w-3 h-3 rounded-full" style={{ background: GHOST_COLORS[k] }} />
-                      {{ nicotina: 'Nicotina: te persigue', azucar: 'Azúcar: te corta el paso', alcohol: 'Alcohol: va dando tumbos', insomnio: 'Insomnio: te ronda y se aparta' }[k]}
+                      {{ nicotina: 'Cigarrillo: te persigue', azucar: 'Refresco: te corta el paso', alcohol: 'Botellín: va dando tumbos', insomnio: 'Móvil de noche: te ronda y se aparta' }[k]}
                     </li>
                   ))}
                 </ul>

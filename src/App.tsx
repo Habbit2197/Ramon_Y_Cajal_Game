@@ -19,6 +19,7 @@ import { StoryPauseModal, StoryOutcomeModal, timeBonus } from './modes/StoryModa
 const ArcadeMode = lazy(() => import('./modes/ArcadeMode').then((m) => ({ default: m.ArcadeMode })));
 const MazeMode = lazy(() => import('./modes/maze/MazeMode').then((m) => ({ default: m.MazeMode })));
 const LabMode = lazy(() => import('./modes/lab/LabMode').then((m) => ({ default: m.LabMode })));
+const ClassroomPanel = lazy(() => import('./components/menu/ClassroomPanel').then((m) => ({ default: m.ClassroomPanel })));
 const MuseumBook = lazy(() => import('./components/menu/MuseumBook').then((m) => ({ default: m.MuseumBook })));
 /** Precarga el modo en cuanto se selecciona en el menú, para que al pulsar «Jugar» ya esté listo */
 export const prefetchMode = (m: PlayId) => {
@@ -93,6 +94,7 @@ export default function App() {
   const [coach, setCoach] = useState<GameMode | null>(null);
   const [bookOpen, setBookOpen] = useState(false);
   const [museumOpen, setMuseumOpen] = useState(false);
+  const [classroomOpen, setClassroomOpen] = useState(false);
   /** Victoria del Modo Historia a la espera de la pregunta de Cajal */
   const [storyQuiz, setStoryQuiz] = useState<{ stats: HudSnapshot; base: number } | null>(null);
   const daily = useSession((s) => s.daily);
@@ -271,9 +273,10 @@ export default function App() {
           onHowToPlay={() => isMainMode(mode) && setOnboarding({ mode, thenStart: true })}
           onOpenBook={() => setBookOpen(true)}
           onOpenMuseum={() => setMuseumOpen(true)}
+          onOpenClassroom={() => setClassroomOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onPlayDaily={playDaily}
-          keyboardEnabled={!onboarding && !bookOpen && !settingsOpen && !gddOpen && !museumOpen}
+          keyboardEnabled={!onboarding && !bookOpen && !settingsOpen && !gddOpen && !museumOpen && !classroomOpen}
         />
       )}
 
@@ -363,6 +366,7 @@ export default function App() {
       {onboarding && <OnboardingModal mode={onboarding.mode} onDone={finishOnboarding} />}
       {bookOpen && <TrophyBook onClose={() => setBookOpen(false)} />}
       <Suspense fallback={null}>{museumOpen && <MuseumBook onClose={() => setMuseumOpen(false)} />}</Suspense>
+      <Suspense fallback={null}>{classroomOpen && <ClassroomPanel onClose={() => setClassroomOpen(false)} />}</Suspense>
       {settingsOpen && <SettingsPanel muted={muted} onToggleMute={toggleMute} onClose={() => setSettingsOpen(false)} />}
       <TrophyToasts />
 

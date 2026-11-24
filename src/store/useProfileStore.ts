@@ -14,6 +14,8 @@ import { dailyStreak, PLAY_IDS, type PlayId } from '../game/daily';
 import { MUSEUM_BY_ID } from '../game/museum';
 import { QUIZ_BY_ID } from '../game/quiz';
 import { submitOnline } from '../net/onlineBoard';
+import { scheduleClassSync, flushClassSync, syncClass } from '../net/classroom';
+import { classSummary } from '../game/classroom';
 import { useToastStore } from './useToastStore';
 
 /** Modos principales (tienen onboarding y guía en partida) */
@@ -59,6 +61,15 @@ export interface PlayerProgress {
   daily: { best: Record<string, number>; completed: string[] };
   /** Mejor puntuación en cada minijuego */
   labBest: Partial<Record<LabGame, number>>;
+  /** Clase a la que se ha unido este alias (modo aula) */
+  classroom?: { code: string; className: string; token: string };
+}
+
+/** Clases creadas como profe en este dispositivo */
+export interface TeacherClass {
+  code: string;
+  className: string;
+  key: string;
 }
 
 export const LEADERBOARD_SIZE = 20;
@@ -91,6 +102,7 @@ function cloneProgress(prev: PlayerProgress): PlayerProgress {
     quizAnswered: [...(prev.quizAnswered ?? [])],
     daily: { best: { ...(prev.daily?.best ?? {}) }, completed: [...(prev.daily?.completed ?? [])] },
     labBest: { ...(prev.labBest ?? {}) },
+    ...(prev.classroom ? { classroom: { ...prev.classroom } } : {}),
   };
 }
 
@@ -141,6 +153,13 @@ interface ProfileState {
   /** Publicar las puntuaciones en la clasificación de todos */
   shareOnline: boolean;
   setShareOnline: (v: boolean) => void;
+  teacherClasses: TeacherClass[];
+  /** Une (o quita, con null) al alias actual de una clase */
+  setClassroom: (c: PlayerProgress['classroom'] | null) => void;
+  addTeacherClass: (c: TeacherClass) => void;
+  removeTeacherClass: (code: string) => void;
+  /** Envía ya el progreso a la clase (al unirse) */
+  syncClassroomNow: () => void;
   progress: Record<string, PlayerProgress>;
   /** Id de la última entrada enviada, para resaltarla */
   lastEntryId: string | null;
@@ -216,6 +235,17 @@ export const useProfileStore = create<ProfileState>()(
           useToastStore.getState().push({ kind: 'trophy', title: t.name, body: t.how });
         }
         set({ progress: { ...s.progress, [key]: p } });
+        queueClassSync();
+      };
+
+      /** Si el alias está en una clase, programa el envío de su resumen (sin bloquear el juego) */
+      const queueClassSync = () => {
+        const s = get();
+        const p = s.playerName ? s.progress[aliasKey(s.playerName)] : undefined;
+        const c = p?.classroom;
+        if (!p || !c) return;
+        const name = s.playerName, avatar = s.avatar;
+        scheduleClassSync(() => syncClass(c.code, name, c.token, avatar, classSummary(p, get().leaderboard, name)));
       };
 
       /** Marca fichas nuevas en el progreso y avisa de cada una */
@@ -243,6 +273,18 @@ export const useProfileStore = create<ProfileState>()(
         lastEntryId: null,
 
         setShareOnline: (v) => set({ shareOnline: v }),
+        teacherClasses: [],
+        setClassroom: (c) =>
+          update((p) => {
+            if (c) p.classroom = c;
+            else delete p.classroom;
+          }),
+        addTeacherClass: (c) => set((s) => ({ teacherClasses: [c, ...s.teacherClasses.filter((x) => x.code !== c.code)].slice(0, 20) })),
+        removeTeacherClass: (code) => set((s) => ({ teacherClasses: s.teacherClasses.filter((x) => x.code !== code) })),
+        syncClassroomNow: () => {
+          queueClassSync();
+          flushClassSync();
+        },
 
         setPlayerName: (raw) => {
           const r = checkPlayerName(raw);
@@ -408,6 +450,7 @@ export const useProfileStore = create<ProfileState>()(
         leaderboard: s.leaderboard,
         dailyBoard: s.dailyBoard,
         shareOnline: s.shareOnline,
+        teacherClasses: s.teacherClasses,
         progress: Object.fromEntries(
           Object.entries(s.progress).map(([k, p]) => [
             k,
@@ -423,6 +466,7 @@ export const useProfileStore = create<ProfileState>()(
         s.leaderboard = Object.assign(emptyBoards(), s.leaderboard);
         s.dailyBoard = s.dailyBoard ?? {};
         s.shareOnline = s.shareOnline ?? true;
+        s.teacherClasses = s.teacherClasses ?? [];
         const progress: Record<string, PlayerProgress> = {};
         for (const [k, p] of Object.entries(s.progress ?? {})) {
           const c = cloneProgress(p as PlayerProgress);

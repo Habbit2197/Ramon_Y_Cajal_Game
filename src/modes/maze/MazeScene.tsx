@@ -6,6 +6,7 @@
  * La red se «enciende» a medida que el jugador recoge las vesículas: cada axón y cada neurona
  * pasan de apagados a brillantes.
  */
+import { cigaretteGeometry, sodaCanGeometry, beerBottleGeometry, phoneGeometry } from '../../components/3d/toxinGeometry';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -15,10 +16,18 @@ import { isGhostOnly, type MazeGraph } from '../../game/maze/graph';
 import { NeuralNetwork } from '../../components/3d/NeuralNetwork';
 
 export const GHOST_COLORS: Record<GhostKind, string> = {
-  nicotina: '#c3b4e6',
-  azucar: '#ff9f5a',
-  alcohol: '#ff6b6b',
-  insomnio: '#6f8cff',
+  nicotina: '#e8dcc8',
+  azucar: '#e0353b',
+  alcohol: '#c07a2c',
+  insomnio: '#7fb8ff',
+};
+
+/** Forma de cada toxina: cigarrillo, lata de refresco, botellín y móvil encendido */
+const GHOST_GEOMETRY: Record<GhostKind, () => THREE.BufferGeometry> = {
+  nicotina: () => cigaretteGeometry(1.3, -1.1, 2.2),
+  azucar: () => sodaCanGeometry(1.2, -0.7),
+  alcohol: () => beerBottleGeometry(1.35, -0.9),
+  insomnio: () => phoneGeometry(1.2, -0.8),
 };
 
 const _m = new THREE.Matrix4();
@@ -250,7 +259,8 @@ function GhostMesh({ state, index }: { state: React.MutableRefObject<MazeState>;
   const body = useRef<THREE.Mesh>(null!);
   const mat = useRef<THREE.MeshBasicMaterial>(null!);
   const pupils = useRef<THREE.Group>(null!);
-  const base = useMemo(() => new THREE.Color(GHOST_COLORS[state.current.ghosts[index].kind]).multiplyScalar(1.6), [state, index]);
+  const kind = state.current.ghosts[index].kind;
+  const geometry = useMemo(() => GHOST_GEOMETRY[kind](), [kind]);
 
   useFrame((st) => {
     const s = state.current;
@@ -269,7 +279,7 @@ function GhostMesh({ state, index }: { state: React.MutableRefObject<MazeState>;
       _c.setRGB(blink ? 2.4 : 0.3, blink ? 2.4 : 0.6, blink ? 2.4 : 2.2);
       group.current.rotation.y = 0;
     } else {
-      _c.copy(base);
+      _c.setRGB(1, 1, 1); // colores propios del objeto
       group.current.rotation.y = 0;
     }
     mat.current.color.copy(_c);
@@ -279,9 +289,8 @@ function GhostMesh({ state, index }: { state: React.MutableRefObject<MazeState>;
 
   return (
     <group ref={group}>
-      <mesh ref={body}>
-        <sphereGeometry args={[0.44, 20, 16]} />
-        <meshBasicMaterial ref={mat} toneMapped={false} />
+      <mesh ref={body} geometry={geometry}>
+        <meshBasicMaterial ref={mat} vertexColors toneMapped={false} />
       </mesh>
       {/* ojos (siempre visibles: también cuando vuelve a la guarida) */}
       {[-0.15, 0.15].map((ox) => (

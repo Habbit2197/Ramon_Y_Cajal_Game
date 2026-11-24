@@ -5,6 +5,7 @@
  * monitoreo de performance en caliente con drei y pipeline HDR completo.
  */
 
+import { cigaretteGeometry, beerBottleGeometry, sodaCanGeometry } from './components/3d/toxinGeometry';
 import { useState, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
@@ -62,39 +63,19 @@ export function App3D() {
     world.maxEnemies = TIER_CONFIG[tier].maxEnemies;
   }, [tier]);
 
+  // Toxinas con forma reconocible: tabaco = cigarrillo, alcohol = botellín (se parte en botellines
+  // más pequeños), ultraprocesados = lata de refresco. Colores por vértice, una llamada por tipo.
   const enemyPools = useMemo(
-    () => [
-      {
-        kind: 'swarmer' as EnemyKind,
-        geometry: new THREE.IcosahedronGeometry(0.28, 1),
-        material: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.9, 1.8), toneMapped: false }),
-        size: { low: 48, mid: 96, high: 160 },
-      },
-      {
-        kind: 'tank0' as EnemyKind,
-        geometry: new THREE.DodecahedronGeometry(0.9, 0),
-        material: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.8, 1.8, 0.4), toneMapped: false }),
-        size: { low: 4, mid: 8, high: 16 },
-      },
-      {
-        kind: 'tank1' as EnemyKind,
-        geometry: new THREE.DodecahedronGeometry(0.63, 0),
-        material: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.5, 1.6, 0.4), toneMapped: false }),
-        size: { low: 8, mid: 16, high: 32 },
-      },
-      {
-        kind: 'tank2' as EnemyKind,
-        geometry: new THREE.DodecahedronGeometry(0.44, 0),
-        material: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.4, 0.4), toneMapped: false }),
-        size: { low: 16, mid: 32, high: 64 },
-      },
-      {
-        kind: 'homing' as EnemyKind,
-        geometry: new THREE.BoxGeometry(0.55, 0.55, 0.55),
-        material: new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.2, 0.3), toneMapped: false }),
-        size: { low: 12, mid: 18, high: 24 },
-      },
-    ],
+    () => {
+      const mat = () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+      return [
+        { kind: 'swarmer' as EnemyKind, geometry: cigaretteGeometry(0.8), material: mat(), size: { low: 48, mid: 96, high: 160 } },
+        { kind: 'tank0' as EnemyKind, geometry: beerBottleGeometry(1.9), material: mat(), size: { low: 4, mid: 8, high: 16 } },
+        { kind: 'tank1' as EnemyKind, geometry: beerBottleGeometry(1.35), material: mat(), size: { low: 8, mid: 16, high: 32 } },
+        { kind: 'tank2' as EnemyKind, geometry: beerBottleGeometry(0.95), material: mat(), size: { low: 16, mid: 32, high: 64 } },
+        { kind: 'homing' as EnemyKind, geometry: sodaCanGeometry(0.9), material: mat(), size: { low: 12, mid: 18, high: 24 } },
+      ];
+    },
     []
   );
 

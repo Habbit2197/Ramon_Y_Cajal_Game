@@ -50,7 +50,7 @@ const RATE_WINDOW_MIN = 10;
 const RATE_MAX = 8;
 const DAILY_DAYS_KEPT = 30;
 
-const json = (data: unknown, status = 200, cache = 'no-store') =>
+export const json = (data: unknown, status = 200, cache = 'no-store') =>
   new Response(JSON.stringify(data), {
     status,
     headers: {
@@ -110,7 +110,7 @@ export function validateSubmission(body: unknown, now = new Date()): { ok: true;
   return { ok: true, value: { board: b.board, day, name: n.value, key: nameKey(n.value), avatar, score, detail: cleanDetail(b.detail), difficulty, modifier } };
 }
 
-async function ipHash(request: Request, salt: string, now: Date): Promise<string> {
+export async function ipHash(request: Request, salt: string, now: Date): Promise<string> {
   const ip = request.headers.get('CF-Connecting-IP') ?? request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ?? 'desconocida';
   const data = new TextEncoder().encode(`${salt}|${ip}|${now.toISOString().slice(0, 10)}`);
   const digest = await crypto.subtle.digest('SHA-256', data);

@@ -6,6 +6,7 @@ import { paramsFor, setActiveDifficulty, DIFFICULTIES } from './difficulty';
 import { dailyChallenge, dateKey, dailyStreak, hashString, PLAY_IDS } from './daily';
 import { QUIZ, pickQuestion, shuffledOptions, quizPointsBonus } from './quiz';
 import { MUSEUM, MUSEUM_BY_ID } from './museum';
+import { MUSEUM_TOTAL } from './museumCount';
 import { TROPHIES, EMPTY_STATS, starsForWin } from './trophies';
 import { createMazeGame, grantPower, powerSecondsFor, MAZE_RULES } from './maze/sim';
 import { world } from '../engine/world';
@@ -111,7 +112,7 @@ describe('Desafío Diario', () => {
 
 describe('Preguntas de Cajal y Museo', () => {
   it('cada pregunta tiene 3 opciones distintas, una correcta, explicación y ficha existente', () => {
-    expect(QUIZ.length).toBeGreaterThanOrEqual(25);
+    expect(QUIZ.length).toBeGreaterThanOrEqual(55);
     expect(new Set(QUIZ.map((q) => q.id)).size).toBe(QUIZ.length);
     for (const q of QUIZ) {
       expect(new Set(q.options).size).toBe(3);
@@ -121,9 +122,12 @@ describe('Preguntas de Cajal y Museo', () => {
     }
   });
 
-  it('el Museo tiene 33 fichas únicas, como pide la medalla', () => {
-    expect(MUSEUM).toHaveLength(33);
-    expect(new Set(MUSEUM.map((c) => c.id)).size).toBe(33);
+  it('el Museo tiene fichas únicas y la medalla pide exactamente todas', () => {
+    expect(MUSEUM.length).toBe(MUSEUM_TOTAL);
+    expect(MUSEUM.length).toBeGreaterThanOrEqual(46);
+    expect(new Set(MUSEUM.map((c) => c.id)).size).toBe(MUSEUM.length);
+    // todas las salas tienen fichas y cada ficha que se gana con preguntas tiene al menos una
+    for (const c of MUSEUM.filter((x) => x.hint.startsWith('Acierta'))) expect(QUIZ.some((q) => q.card === c.id), c.id).toBe(true);
     const t = TROPHIES.find((x) => x.id === 'museo-completo')!;
     expect(t.check({ ...EMPTY_STATS, discoveries: MUSEUM.length }, {})).toBe(true);
   });
@@ -200,5 +204,25 @@ describe('Progreso educativo del alias', () => {
     expect(p.trophies['ritmo-perfecto']).toBeTruthy();
     expect(p.trophies.arquitecto).toBeTruthy();
     expect(p.stats.discoveries).toBe(4);
+  });
+});
+
+describe('Modo aula: resumen que ve el profe', () => {
+  it('solo lleva números del juego y las mejores puntuaciones de ese alias', async () => {
+    const { classSummary, classCsv, isClassCode, normalizeClassCode } = await import('./classroom');
+    useProfileStore.setState({ playerName: 'Aula Prueba', progress: {}, dailyBoard: {}, shareOnline: false });
+    const st = useProfileStore.getState();
+    st.recordQuiz(QUIZ[1].id, true);
+    st.recordLab('micro', { score: 700, completed: true, found: 6, cards: ['piramidal'] });
+    st.submitScore('maze', 2500, 'Nivel 2');
+    useProfileStore.setState((s) => ({ leaderboard: { ...s.leaderboard, maze: [...s.leaderboard.maze, { id: 'x', name: 'Otro', avatar: 0, score: 9999, detail: '', date: '' }] } }));
+    const p = useProfileStore.getState().progress[aliasKey('Aula Prueba')];
+    const sum = classSummary(p, useProfileStore.getState().leaderboard, 'Aula Prueba');
+    expect(sum).toMatchObject({ quiz: 1, labGames: 1, microBest: 700, mazeBest: 2500, museum: 2 });
+    expect(Object.keys(sum).sort()).toEqual(['arcadeBest', 'buildBest', 'daily', 'difficulty', 'games', 'labGames', 'mazeBest', 'medals', 'microBest', 'museum', 'quiz', 'rhythmBest', 'stars', 'storyBest', 'streak']);
+    expect(classCsv([{ name: 'Aula Prueba', updated: '2026-11-24T10:00:00Z', progress: sum }])).toContain('"Aula Prueba";"');
+    expect(normalizeClassCode(' k7q-mzp ')).toBe('K7QMZP');
+    expect(isClassCode('K7QMZP')).toBe(true);
+    expect(isClassCode('K0QMZP')).toBe(false);
   });
 });

@@ -6,6 +6,9 @@
  * Para afinar la dificultad, cambia solo las constantes de STAR_RULES y los umbrales.
  */
 
+/** Fichas del Museo (solo el número, para que este archivo siga ligero) */
+import { MUSEUM_TOTAL } from './museumCount';
+
 export interface PlayerStats {
   storyGames: number;
   arcadeGames: number;
@@ -136,10 +139,10 @@ export const TROPHIES: TrophyDef[] = [
   },
   {
     id: 'museo-completo', group: 'general', name: 'Conservador del museo',
-    how: 'Descubre las 33 fichas del Museo.',
+    how: 'Descubre todas las fichas del Museo.',
     fact: 'La UNESCO incluyó el archivo de Cajal en el registro Memoria del Mundo en 2017.',
-    check: (s) => s.discoveries >= 33,
-    progress: (s) => ratio(s.discoveries, 33),
+    check: (s) => s.discoveries >= MUSEUM_TOTAL,
+    progress: (s) => ratio(s.discoveries, MUSEUM_TOTAL),
   },
   {
     id: 'desafio-diario', group: 'general', name: 'Cita diaria',
