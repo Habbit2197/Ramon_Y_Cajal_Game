@@ -42,6 +42,7 @@ export interface PlayerStats {
   dailyCompleted: number; // Desafíos Diarios completados
   dailyBestStreak: number; // racha más larga de días seguidos
   nobelWins: number; // victorias en dificultad Nobel
+  brushBestClean: number; // mejor porcentaje de limpieza en Cepíllate los dientes
 }
 
 export const EMPTY_STATS: PlayerStats = {
@@ -76,6 +77,7 @@ export const EMPTY_STATS: PlayerStats = {
   dailyCompleted: 0,
   dailyBestStreak: 0,
   nobelWins: 0,
+  brushBestClean: 0,
 };
 
 export type TrophyGroup = 'general' | 'story' | 'arcade' | 'maze' | 'lab';
@@ -338,6 +340,13 @@ export const TROPHIES: TrophyDef[] = [
     fact: 'Las neuronas del cerebro trabajan a ritmos distintos, y esas ondas se pueden medir con un electroencefalograma.',
     check: (s) => s.rhythmBestAccuracy >= 90,
     progress: (s) => ratio(s.rhythmBestAccuracy, 90),
+  },
+  {
+    id: 'sonrisa-sana', group: 'lab', name: 'Sonrisa sana',
+    how: 'Deja los dientes limpios al 90 % en Cepíllate los dientes.',
+    fact: 'Los dientes de leche también importan: guardan el sitio a los definitivos y te ayudan a masticar y a hablar.',
+    check: (s) => (s.brushBestClean ?? 0) >= 90,
+    progress: (s) => ratio(s.brushBestClean ?? 0, 90),
   },
 ];
 

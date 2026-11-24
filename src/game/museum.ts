@@ -5,7 +5,7 @@
  * los niños sepan dónde buscarla. Los textos son breves, en lenguaje claro y comprobados.
  */
 
-export type MuseumRoom = 'cajal' | 'escuela' | 'neurona' | 'tipos' | 'quimica' | 'regiones' | 'cerebro';
+export type MuseumRoom = 'cajal' | 'escuela' | 'neurona' | 'tipos' | 'quimica' | 'regiones' | 'cerebro' | 'sonrisa';
 
 export interface MuseumCard {
   id: string;
@@ -20,6 +20,7 @@ export const ROOMS: Record<MuseumRoom, { label: string; blurb: string }> = {
   cajal: { label: 'La vida de Cajal', blurb: 'Del pueblo navarro al Premio Nobel.' },
   escuela: { label: 'La escuela de Cajal', blurb: 'Sus discípulos y los científicos de su época.' },
   regiones: { label: 'Partes del cerebro', blurb: 'Cada zona tiene su trabajo, y todas colaboran.' },
+  sonrisa: { label: 'Sonrisa sana', blurb: 'Cuidar los dientes también es un hábito sano.' },
   neurona: { label: 'Partes de la neurona', blurb: 'Cómo es por dentro la célula que piensa.' },
   tipos: { label: 'Tipos de neuronas', blurb: 'Las que Cajal dibujó con su microscopio.' },
   quimica: { label: 'Mensajeros químicos', blurb: 'Lo que cruza la sinapsis.' },
@@ -30,6 +31,7 @@ const Q = 'Acierta una pregunta de Cajal entre niveles.';
 const MICRO = 'Descúbrela con la tinción del Microscopio.';
 const BUILD = 'Colócala en el taller Construye la neurona.';
 const RHYTHM = 'Lánzala en el minijuego Sinapsis rítmica.';
+const BRUSH = 'Descúbrela en el minijuego Cepíllate los dientes.';
 
 export const MUSEUM: MuseumCard[] = [
   // ── La vida de Cajal ──
@@ -121,6 +123,20 @@ export const MUSEUM: MuseumCard[] = [
     text: 'Une el cerebro con la médula espinal y controla cosas automáticas como respirar o el latido del corazón.' },
   { id: 'medula', room: 'regiones', title: 'Médula espinal', hint: Q,
     text: 'Es la gran autopista de nervios que baja por dentro de la columna y lleva mensajes entre el cerebro y el cuerpo.' },
+
+  // ── Sonrisa sana ──
+  { id: 'placa', room: 'sonrisa', title: 'La placa', hint: BRUSH,
+    text: 'Cada día se forma sobre los dientes una capa pegajosa llena de bacterias: la placa. Se acumula sobre todo junto a la encía y entre los dientes.' },
+  { id: 'caries', room: 'sonrisa', title: 'Así nacen las caries', hint: 'Deja los dientes limpios al 80 % en Cepíllate los dientes.',
+    text: 'Las bacterias de la placa se alimentan del azúcar y fabrican ácidos que agujerean el esmalte. Menos azúcar y buen cepillado: menos caries.' },
+  { id: 'pasta-guisante', room: 'sonrisa', title: 'Del tamaño de un guisante', hint: 'Pon la pasta justa en Cepíllate los dientes.',
+    text: 'Basta con pasta con flúor del tamaño de un guisante. En menores de tres años, como un grano de arroz. Más pasta no limpia más.' },
+  { id: 'dos-minutos', room: 'sonrisa', title: 'Dos minutos, dos veces', hint: 'Cepilla las cuatro zonas de la boca.',
+    text: 'Cepíllate dos veces al día durante dos minutos: unos 30 segundos por cada zona de la boca, por fuera, por dentro y por arriba.' },
+  { id: 'escupir', room: 'sonrisa', title: 'Escupe, no enjuagues', hint: 'Elige bien qué hacer al final de Cepíllate los dientes.',
+    text: 'Al terminar, escupe la espuma pero no te enjuagues con agua: así el flúor de la pasta sigue protegiendo tus dientes un rato más.' },
+  { id: 'cepillo-noche', room: 'sonrisa', title: 'El cepillado de la noche', hint: Q,
+    text: 'Es el más importante: mientras duermes hay menos saliva para proteger los dientes. Y cambia el cepillo cada tres meses o cuando se abran las cerdas.' },
 
   // ── Cerebro sano ──
   { id: 'ejercicio', room: 'cerebro', title: 'Muévete', hint: Q,

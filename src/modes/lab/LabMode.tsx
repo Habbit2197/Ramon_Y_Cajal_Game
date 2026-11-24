@@ -7,7 +7,7 @@
  */
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Home, RotateCcw, Play, Pause, Volume2, VolumeX, Landmark, CalendarCheck, Microscope, Puzzle, Music } from 'lucide-react';
+import { Home, RotateCcw, Play, Pause, Volume2, VolumeX, Landmark, CalendarCheck, Microscope, Puzzle, Music, Smile } from 'lucide-react';
 import { useProfileStore, aliasKey, type LabGame, type LabResult } from '../../store/useProfileStore';
 import { useSession, dailyFor, finishRun } from '../../store/useSession';
 import { activeDifficulty, activeParams, DIFFICULTY_INFO, MODIFIER_INFO } from '../../game/difficulty';
@@ -21,6 +21,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 const MicroGame = lazy(() => import('./MicroGame'));
 const BuildGame = lazy(() => import('./BuildGame'));
 const RhythmGame = lazy(() => import('./RhythmGame'));
+const BrushGame = lazy(() => import('./BrushGame'));
 
 export interface LabGameProps {
   seed: number;
@@ -61,6 +62,15 @@ const INFO: Record<LabGame, { learn: string; how: (touch: boolean) => string[]; 
       `${t ? 'Toca el carril' : 'Pulsa A, S o D (o las flechas ←, ↓, →)'} cuando la vesícula llegue a la membrana.`,
       'Cada acierto sube el potencial. Al llenarlo, la neurona dispara un potencial de acción: puntos extra.',
       'Las notas rojas con una raya son GABA, un freno: no las pulses, déjalas pasar.',
+    ],
+  },
+  brush: {
+    icon: Smile,
+    learn: 'Cada día se forma placa sobre los dientes: bacterias que, con el azúcar, fabrican ácidos y causan caries. Los dentistas recomiendan cepillarse dos veces al día, dos minutos cada vez.',
+    how: (t) => [
+      `Primero, pon la pasta: ${t ? 'mantén el dedo' : 'mantén pulsado'} sobre el tubo hasta que salga una bolita del tamaño de un guisante.`,
+      `Cepilla las cuatro zonas de la boca, 30 segundos cada una: por fuera, por dentro y por arriba. ${t ? 'Pasa el dedo' : 'Mueve el ratón'} sobre los dientes con vaivenes cortos, como hace el cepillo.`,
+      'Fíjate en la encía y entre los dientes: ahí se esconde la placa. Al final, elige qué hacer con la espuma.',
     ],
   },
 };
@@ -116,7 +126,7 @@ export function LabMode({ game, onExit, muted, onToggleMute }: { game: LabGame; 
     return () => window.removeEventListener('keydown', onKey);
   }, [phase, start]);
 
-  const Game = game === 'micro' ? MicroGame : game === 'build' ? BuildGame : RhythmGame;
+  const Game = game === 'micro' ? MicroGame : game === 'build' ? BuildGame : game === 'rhythm' ? RhythmGame : BrushGame;
   const Icon = info.icon;
   const diff = activeDifficulty();
 

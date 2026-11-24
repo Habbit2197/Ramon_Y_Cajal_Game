@@ -45,7 +45,7 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
   const setPlayerName = useProfileStore((s) => s.setPlayerName);
   const medals = Object.keys(progress.trophies).length;
   const cards = Object.keys(progress.discoveries).length;
-  const isLab = mode === 'micro' || mode === 'build' || mode === 'rhythm';
+  const isLab = mode === 'micro' || mode === 'build' || mode === 'rhythm' || mode === 'brush';
   /** Sin alias, se asigna uno al azar antes de jugar el desafío */
   const playDaily = () => {
     if (!useProfileStore.getState().playerName) setPlayerName(randomAlias());
@@ -207,6 +207,7 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
                   micro: 'Objetivo: tiñe tres muestras y descubre qué neuronas esconden.',
                   build: 'Objetivo: monta tres neuronas pieza a pieza y haz pasar el impulso.',
                   rhythm: 'Objetivo: suma mensajes hasta que la neurona dispare, sin pulsar los frenos.',
+                  brush: 'Objetivo: quita toda la placa en dos minutos, zona a zona, como en el dentista.',
                 }[mode]}
               </span>
             ) : (
@@ -223,6 +224,7 @@ export function MainMenu({ mode, onModeChange, levelIndex, onLevelChange, onPlay
                 micro: 'Arrastra el ratón para teñir la muestra',
                 build: 'Arrastra cada pieza a su sitio, o tócala y luego toca el hueco',
                 rhythm: 'Teclas A, S y D (o flechas) para lanzar los mensajeros',
+                brush: 'Mueve el ratón sobre los dientes con vaivenes cortos',
               }[mode]}
             </span>
             <span className="flex flex-wrap items-center gap-1 md:ml-auto">

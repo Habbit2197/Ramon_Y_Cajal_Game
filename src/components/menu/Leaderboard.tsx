@@ -14,7 +14,7 @@ import { fetchBoard, onlineEnabled, onBoardChange, type OnlineEntry } from '../.
 import { PLAY_COLOR } from './MenuExtras';
 
 type Tab = PlayId | 'daily';
-const TAB_LABEL: Record<Tab, string> = { daily: 'Hoy', story: 'Historia', arcade: 'Arcade', maze: 'Laberinto', micro: 'Microscopio', build: 'Construye', rhythm: 'Ritmo' };
+const TAB_LABEL: Record<Tab, string> = { daily: 'Hoy', story: 'Historia', arcade: 'Arcade', maze: 'Laberinto', micro: 'Microscopio', build: 'Construye', rhythm: 'Ritmo', brush: 'Dientes' };
 const TABS: Tab[] = ['daily', ...PLAY_IDS];
 const EMPTY: never[] = [];
 const dateFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' });

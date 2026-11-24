@@ -25,7 +25,7 @@ const MuseumBook = lazy(() => import('./components/menu/MuseumBook').then((m) =>
 export const prefetchMode = (m: PlayId) => {
   if (m === 'arcade') void import('./modes/ArcadeMode');
   else if (m === 'maze') void import('./modes/maze/MazeMode');
-  else if (m === 'micro' || m === 'build' || m === 'rhythm') void import('./modes/lab/LabMode');
+  else if (m === 'micro' || m === 'build' || m === 'rhythm' || m === 'brush') void import('./modes/lab/LabMode');
 };
 import { LEVELS } from './game/rules';
 import { soundEngine } from './game/sound';
@@ -357,7 +357,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {(screen === 'micro' || screen === 'build' || screen === 'rhythm') && (
+      {(screen === 'micro' || screen === 'build' || screen === 'rhythm' || screen === 'brush') && (
         <Suspense fallback={<ModeLoading />}>
           <LabMode game={screen} onExit={backToMenu} muted={muted} onToggleMute={toggleMute} />
         </Suspense>

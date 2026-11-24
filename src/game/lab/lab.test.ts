@@ -135,3 +135,45 @@ describe('Sinapsis rítmica', () => {
     expect(tap(easy, 0, 1 + late, 1.4).result).toBe('good');
   });
 });
+
+describe('Cepíllate los dientes', () => {
+  it('cada cara tiene placa sobre los dientes, más junto a la encía', async () => {
+    const { makeFace, GRID_W, GRID_H, TOOTH_TOP, TOOTH_BOTTOM, cleanliness } = await import('./brush');
+    const f = makeFace('fuera', 3, true);
+    expect(f.initial).toBeGreaterThan(100);
+    expect(cleanliness(f)).toBeCloseTo(0, 6);
+    const row = (y: number) => { const gy = Math.floor(y * GRID_H); let s = 0, n = 0; for (let gx = 0; gx < GRID_W; gx++) { const i = gy * GRID_W + gx; if (f.tooth[i]) { s += f.plaque[i]; n++; } } return s / n; };
+    // arriba: la encía está arriba → más placa cerca de TOOTH_TOP que del borde que muerde
+    expect(row(TOOTH_TOP + 0.04)).toBeGreaterThan(row(TOOTH_BOTTOM - 0.06));
+    expect(makeFace('fuera', 3, true).plaque).toEqual(f.plaque);
+  });
+
+  it('el vaivén corto limpia mucho más que pasar de largo deprisa', async () => {
+    const { makeFace, scrub, newStroke, cleanliness } = await import('./brush');
+    const wiggle = makeFace('fuera', 9, true), sweep = makeFace('fuera', 9, true);
+    const s1 = newStroke(), s2 = newStroke();
+    const dt = 1 / 60;
+    // 6 segundos: vaivén de ±2 % recorriendo la cara despacio
+    for (let k = 0; k < 360; k++) {
+      const base = (k / 360) * 0.9 + 0.05;
+      scrub(wiggle, s1, base + (k % 2 ? 0.02 : -0.02), 0.25 + 0.5 * ((k / 60) % 1), dt);
+    }
+    // 6 segundos: barridos largos y rápidos de un lado a otro
+    for (let k = 0; k < 360; k++) scrub(sweep, s2, k % 2 ? 0.95 : 0.05, 0.25 + 0.5 * ((k / 60) % 1), dt);
+    expect(cleanliness(wiggle)).toBeGreaterThan(0.5);
+    expect(cleanliness(wiggle)).toBeGreaterThan(cleanliness(sweep) * 1.5);
+  });
+
+  it('la pasta justa es un guisante y la puntuación premia hacerlo bien', async () => {
+    const { pasteAmount, pasteVerdict, brushScore, brushCards, AFTER_OPTIONS } = await import('./brush');
+    expect(pasteVerdict(pasteAmount(0.2))).toBe('poca');
+    expect(pasteVerdict(pasteAmount(0.7))).toBe('guisante');
+    expect(pasteVerdict(pasteAmount(2))).toBe('mucha');
+    expect(AFTER_OPTIONS.filter((o) => o.correct).map((o) => o.id)).toEqual(['escupir']);
+    const faces = Array(12).fill(0.9);
+    expect(brushScore(faces, 'guisante', true)).toBe(Math.round(12 * 90 + 200 + 150));
+    expect(brushScore(faces, 'mucha', false)).toBe(1080);
+    expect(brushCards(0.9, 'guisante', true, 4)).toEqual(['placa', 'pasta-guisante', 'escupir', 'dos-minutos', 'caries']);
+    for (const c of brushCards(0.9, 'guisante', true, 4)) expect(MUSEUM_BY_ID[c], c).toBeDefined();
+  });
+});

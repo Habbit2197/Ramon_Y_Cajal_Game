@@ -22,8 +22,8 @@ import { useToastStore } from './useToastStore';
 export type GameMode = 'story' | 'arcade' | 'maze';
 export const GAME_MODES: GameMode[] = ['story', 'arcade', 'maze'];
 /** Minijuegos del Laboratorio de Cajal */
-export type LabGame = 'micro' | 'build' | 'rhythm';
-export const LAB_GAMES: LabGame[] = ['micro', 'build', 'rhythm'];
+export type LabGame = 'micro' | 'build' | 'rhythm' | 'brush';
+export const LAB_GAMES: LabGame[] = ['micro', 'build', 'rhythm', 'brush'];
 /** Todo lo que tiene clasificación propia */
 export type { PlayId };
 
@@ -142,6 +142,8 @@ export interface LabResult {
   found?: number;
   /** Sinapsis rítmica: porcentaje de aciertos */
   accuracy?: number;
+  /** Cepíllate los dientes: porcentaje de limpieza */
+  clean?: number;
 }
 
 interface ProfileState {
@@ -336,6 +338,7 @@ export const useProfileStore = create<ProfileState>()(
             if (game === 'micro' && r.found !== undefined) st.microBestFound = Math.max(st.microBestFound, r.found);
             if (game === 'build' && r.completed) st.buildCompleted++;
             if (game === 'rhythm' && r.accuracy !== undefined && r.completed) st.rhythmBestAccuracy = Math.max(st.rhythmBestAccuracy, Math.round(r.accuracy));
+            if (game === 'brush' && r.clean !== undefined) st.brushBestClean = Math.max(st.brushBestClean ?? 0, Math.round(r.clean));
             if (r.completed && activeDifficulty().difficulty === 'nobel') st.nobelWins++;
             addCards(p, r.cards);
           }),

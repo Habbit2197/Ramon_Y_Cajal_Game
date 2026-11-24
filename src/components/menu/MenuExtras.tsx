@@ -1,7 +1,7 @@
 /**
  * MenuExtras.tsx — Piezas del menú principal: Desafío Diario, dificultad y Laboratorio de Cajal.
  */
-import { CalendarCheck, Check, Flame, Microscope, Puzzle, Music } from 'lucide-react';
+import { CalendarCheck, Check, Flame, Microscope, Puzzle, Music, Smile } from 'lucide-react';
 import { dailyChallenge, dailyStreak, dateKey, type PlayId } from '../../game/daily';
 import { DIFFICULTIES, DIFFICULTY_INFO, MODIFIER_INFO } from '../../game/difficulty';
 import { useCurrentProgress, useDifficulty, useProfileStore, type LabGame } from '../../store/useProfileStore';
@@ -14,6 +14,7 @@ export const PLAY_LABEL: Record<PlayId, string> = {
   micro: 'Microscopio',
   build: 'Construye la neurona',
   rhythm: 'Sinapsis rítmica',
+  brush: 'Cepíllate los dientes',
 };
 
 /** Color de acento de cada modo (botón Jugar, pestañas de la clasificación) */
@@ -24,6 +25,7 @@ export const PLAY_COLOR: Record<PlayId, { bg: string; fg: string }> = {
   micro: { bg: '#7fe0a8', fg: '#06200f' },
   build: { bg: '#ffb86b', fg: '#2a1404' },
   rhythm: { bg: '#ff8fb1', fg: '#2b0614' },
+  brush: { bg: '#9fe7f5', fg: '#052a33' },
 };
 
 const dayFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -113,6 +115,7 @@ const LAB: { id: LabGame; title: string; blurb: string; icon: typeof Microscope 
   { id: 'micro', title: 'Microscopio', blurb: 'Tiñe una muestra como Cajal y descubre neuronas ocultas.', icon: Microscope },
   { id: 'build', title: 'Construye la neurona', blurb: 'Monta sus partes y envía un impulso.', icon: Puzzle },
   { id: 'rhythm', title: 'Sinapsis rítmica', blurb: 'Lanza neurotransmisores al ritmo justo.', icon: Music },
+  { id: 'brush', title: 'Cepíllate los dientes', blurb: 'Dos minutos, cuatro zonas y ni una mancha de placa.', icon: Smile },
 ];
 
 export function LabTiles({ mode, onSelect }: { mode: PlayId; onSelect: (m: LabGame) => void }) {
@@ -120,7 +123,7 @@ export function LabTiles({ mode, onSelect }: { mode: PlayId; onSelect: (m: LabGa
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm text-[#e9e3d6] mb-1">Laboratorio de Cajal</legend>
-      <div role="radiogroup" aria-label="Minijuegos" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div role="radiogroup" aria-label="Minijuegos" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {LAB.map(({ id, title, blurb, icon: Icon }) => {
           const sel = mode === id;
           const c = PLAY_COLOR[id];

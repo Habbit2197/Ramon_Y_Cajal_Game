@@ -44,6 +44,7 @@ export const MAX_SCORE: Record<PlayId, number> = {
   micro: 20_000,
   build: 20_000,
   rhythm: 100_000,
+  brush: 5_000,
 };
 const MODIFIERS: DailyModifier[] = ['clasico', 'veloces', 'fragil', 'contrarreloj'];
 const RATE_WINDOW_MIN = 10;
